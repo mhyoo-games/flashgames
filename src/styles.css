@@ -1,0 +1,412 @@
+:root {
+  --bg: #24163a;
+  --bg2: #301f4d;
+  --card: #3a2a5c;
+  --text: #f5f0ff;
+  --muted: #b8a9d6;
+  --pink: #ff4d8d;
+  --cyan: #5ee0ff;
+  --yellow: #ffe066;
+  --line: #4d3b75;
+  font-family: 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  font-size: 15px;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+body {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% -10%, rgba(255, 77, 141, 0.25), transparent 45%),
+    radial-gradient(circle at 90% 0%, rgba(94, 224, 255, 0.2), transparent 40%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 4px),
+    var(--bg);
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #1a0f2b;
+  transition: transform 0.06s;
+}
+button:hover:not(:disabled) {
+  border-color: var(--cyan);
+}
+button:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #1a0f2b;
+}
+button.primary {
+  background: linear-gradient(#ff6fa3, #ff3d7f);
+  border-color: #ff8ab5;
+  font-weight: 800;
+  box-shadow: 0 4px 0 #a3104a;
+}
+button.big {
+  font-size: 18px;
+  padding: 12px 30px;
+}
+kbd {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  background: #1a0f2b;
+  border: 1px solid var(--line);
+  border-bottom-width: 3px;
+  border-radius: 6px;
+  padding: 1px 6px;
+  margin: 0 1px;
+}
+.muted {
+  color: var(--muted);
+}
+h1,
+h2 {
+  margin: 0;
+}
+
+/* ---- 첫 화면 ---- */
+.home {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 18px;
+}
+.home-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 26px;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.coin {
+  font-size: 46px;
+  animation: spin 3s linear infinite;
+  display: inline-block;
+}
+@keyframes spin {
+  50% {
+    transform: rotateY(180deg);
+  }
+}
+.logo h1 {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, var(--yellow), var(--pink), var(--cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.logo p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px;
+}
+.game-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  text-align: left;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 3px solid var(--line);
+  background: var(--card);
+  position: relative;
+  box-shadow: 0 6px 0 #1a0f2b;
+}
+.game-card:hover:not(.soon) {
+  border-color: var(--c1);
+  transform: translateY(-3px);
+}
+.art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 200 / 110;
+}
+.soon-art {
+  display: grid;
+  place-items: center;
+  font-size: 54px;
+  background: var(--bg2);
+}
+.game-card.soon {
+  border-style: dashed;
+  box-shadow: none;
+  opacity: 0.7;
+}
+.game-info {
+  padding: 14px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.game-info p {
+  margin: 0;
+  line-height: 1.5;
+}
+.game-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.game-title b {
+  font-size: 20px;
+}
+.tag {
+  font-size: 12px;
+  background: var(--c1, var(--line));
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.play {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: var(--pink);
+  border-radius: 12px;
+  padding: 4px 12px;
+  font-weight: 800;
+  font-size: 13px;
+}
+.foot {
+  margin-top: 30px;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* ---- 소리 ---- */
+.sound-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip {
+  padding: 4px 10px;
+  font-size: 13px;
+  border-radius: 20px;
+  box-shadow: none;
+  opacity: 0.6;
+}
+.chip.on {
+  opacity: 1;
+  border-color: var(--cyan);
+}
+.sound-controls input {
+  width: 90px;
+  accent-color: var(--pink);
+}
+
+/* ---- 게임 화면 ---- */
+.shell {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 14px 14px 30px;
+}
+.shell-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.shell-head h1 {
+  flex: 1;
+  font-size: 22px;
+}
+.back {
+  border-radius: 20px;
+}
+.menu-card {
+  background: var(--bg2);
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+}
+.menu-card p {
+  margin: 0;
+  line-height: 1.7;
+}
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+.mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 16px;
+  text-align: left;
+}
+.mode b {
+  font-size: 17px;
+}
+.mode small {
+  color: var(--muted);
+}
+.mode.easy {
+  border-color: #4ade80;
+}
+.mode.normal {
+  border-color: #facc15;
+}
+.mode.hard {
+  border-color: #f87171;
+}
+.mode.versus {
+  border-color: var(--cyan);
+}
+.controls {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 2.1;
+  color: var(--muted);
+}
+.controls b {
+  color: var(--text);
+}
+.stage-wrap {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 3px solid var(--line);
+  background: #000;
+  touch-action: none;
+  user-select: none;
+}
+.stage {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(20, 10, 35, 0.6);
+  backdrop-filter: blur(2px);
+}
+.overlay h2 {
+  font-size: 40px;
+  font-weight: 900;
+  text-shadow: 0 3px 0 #000;
+}
+.overlay p {
+  margin: 0;
+  font-size: 18px;
+}
+.pause-btn {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 4px 10px;
+  opacity: 0.7;
+  box-shadow: none;
+}
+.touchpad {
+  display: none;
+}
+/* 터치 화면이거나 좁은 화면이면 경기장 아래에 버튼 */
+@media (hover: none), (max-width: 760px) {
+  .touchpad {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 4px;
+    user-select: none;
+    touch-action: none;
+  }
+  .touchpad button {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 24px;
+  }
+  .pad-left {
+    display: grid;
+    grid-template-columns: repeat(3, 52px);
+    grid-template-rows: repeat(2, 52px);
+    gap: 6px;
+  }
+  .pad-left .l {
+    grid-area: 2 / 1;
+  }
+  .pad-left .u {
+    grid-area: 1 / 2;
+  }
+  .pad-left .d {
+    grid-area: 2 / 2;
+  }
+  .pad-left .r {
+    grid-area: 2 / 3;
+  }
+  .pad-right {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .pad-right .special {
+    background: linear-gradient(#5ee0ff, #2b8fd6);
+  }
+}
+.scores {
+  border-collapse: collapse;
+  min-width: 300px;
+}
+.scores caption {
+  text-align: left;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.scores td {
+  padding: 4px 12px 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 560px) {
+  .logo h1 {
+    font-size: 26px;
+  }
+  .overlay h2 {
+    font-size: 28px;
+  }
+  .shell {
+    padding: 8px;
+  }
+}

@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: 게임 규칙 테스트 + 타입 검사 + 빌드
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: 게임 규칙 테스트 (격투·미로·음악)
+        run: npm test
+      - name: 타입 검사 + 빌드
+        run: npm run build
+
+  docker:
+    name: Docker 이미지 빌드 + 동작 확인
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build
+      - name: 화면이 뜨는지 확인
+        run: |
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8082/ >/dev/null && break; sleep 1; done
+          curl -fs http://127.0.0.1:8082/ | grep -q '<div id="root">'
+          echo ok
