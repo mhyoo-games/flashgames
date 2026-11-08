@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { load } from '../core/storage';
 import { charById } from '../games/dino/chars';
-import { drawHamster, drawStage, fighterLookStatic } from '../games/dino/render';
+import { drawHamster, drawStage, idlePose } from '../games/dino/render';
 import { GAMES, type GameInfo } from '../games/registry';
 import { SoundControls } from './common';
 
@@ -17,8 +17,8 @@ function DinoArt() {
       const t = (now - t0) / 1000;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       drawStage(ctx, 'jungle', t);
-      drawHamster(ctx, charById('rex'), { x: 330, y: 465, facing: 1, size: 1.9, beast: Math.floor(t / 2.5) % 2 === 1, look: fighterLookStatic(t, 'angry'), time: t });
-      drawHamster(ctx, charById('triko'), { x: 630, y: 465, facing: -1, size: 1.9, beast: true, look: fighterLookStatic(t + 1, 'angry'), time: t });
+      drawHamster(ctx, charById('rex'), { x: 330, y: 465, facing: 1, size: 1.9, beast: Math.floor(t / 2.5) % 2 === 1, pose: idlePose(t, 'angry', 1), time: t, seed: 1 });
+      drawHamster(ctx, charById('triko'), { x: 630, y: 465, facing: -1, size: 1.9, beast: true, pose: idlePose(t, 'angry', 2), time: t, seed: 2 });
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);

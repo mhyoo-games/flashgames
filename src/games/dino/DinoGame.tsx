@@ -6,7 +6,7 @@ import { Shell, useLoop } from '../../ui/common';
 import { DinoAI, LEVELS, type Level } from './ai';
 import { COMMANDS, ROSTER, type CharDef, type Slot, type StageId } from './chars';
 import { DinoFight, H, NO_INPUT, W, type FightOptions, type GameEvent, type Input } from './engine';
-import { CommandReader, type Command, type RawInput } from './input';
+import { CommandReader, NO_RAW, type Command, type RawInput } from './input';
 import { drawPortrait, drawStage, renderFight } from './render';
 import { BOSS_LINES, newStory, selectable, stageResult, type StoryState } from './story';
 
@@ -19,6 +19,9 @@ const SFX: Partial<Record<GameEvent, Sfx>> = {
   special: 'special',
   super: 'special',
   transform: 'power',
+  charge: 'charge',
+  full: 'full',
+  burst: 'burst',
   revert: 'click',
   counter: 'catch',
   ko: 'ko',
@@ -28,20 +31,27 @@ const SFX: Partial<Record<GameEvent, Sfx>> = {
   timeup: 'ko',
 };
 
-type Key = keyof RawInput | 'beast';
-const P1: Record<string, Key> = { KeyA: 'left', KeyD: 'right', KeyW: 'up', KeyS: 'down', KeyJ: 'punch', KeyK: 'kick', KeyL: 'beast' };
+type Key = keyof RawInput;
+const P1: Record<string, Key> = { KeyA: 'left', KeyD: 'right', KeyW: 'up', KeyS: 'down', KeyU: 'lp', KeyI: 'hp', KeyJ: 'lk', KeyK: 'hk', KeyL: 'charge', KeyO: 'charge' };
 const P2: Record<string, Key> = {
   ArrowLeft: 'left',
   ArrowRight: 'right',
   ArrowUp: 'up',
   ArrowDown: 'down',
-  Digit1: 'punch',
-  Numpad1: 'punch',
-  Digit2: 'kick',
-  Numpad2: 'kick',
-  Digit3: 'beast',
-  Numpad3: 'beast',
+  Numpad4: 'lp',
+  Numpad5: 'hp',
+  Numpad1: 'lk',
+  Numpad2: 'hk',
+  Numpad3: 'charge',
+  Numpad6: 'charge',
+  Digit7: 'lp',
+  Digit8: 'hp',
+  Digit9: 'lk',
+  Digit0: 'hk',
+  Minus: 'charge',
 };
+/** 컴퓨터와 할 때 방향키 + 숫자 1~5로도 1P 조작 */
+const ALT1: Record<string, Key> = { ...P2, Digit1: 'lp', Digit2: 'hp', Digit3: 'lk', Digit4: 'hk', Digit5: 'charge' };
 
 interface Saved {
   unlocked: boolean;
@@ -72,7 +82,7 @@ export function DinoGame({ onBack }: { onBack: () => void }) {
     const hero = ROSTER.find((c) => c.id === story.hero)!;
     setScreen({
       kind: 'fight',
-      options: { chars: [hero, st.rival], winsNeeded: 2, roundTime: 60, hpScale: [1, st.final ? 1.15 : 1] },
+      options: { chars: [hero, st.rival], winsNeeded: 2, roundTime: 60, hpScale: [1, st.final ? 1.2 : 1] },
       stage: st.stage,
       ai: st.level,
       story,
@@ -210,17 +220,25 @@ function HowTo() {
         <b>1P</b> <kbd>W</kbd>
         <kbd>A</kbd>
         <kbd>S</kbd>
-        <kbd>D</kbd> 이동 · <kbd>J</kbd> 펀치 · <kbd>K</kbd> 킥 · <kbd>L</kbd> 변신
+        <kbd>D</kbd> 이동 · <kbd>U</kbd> 약펀치 <kbd>I</kbd> 강펀치 · <kbd>J</kbd> 약킥 <kbd>K</kbd> 강킥 · <kbd>L</kbd> 기
       </li>
       <li>
-        <b>2P</b> 방향키 · <kbd>1</kbd> 펀치 · <kbd>2</kbd> 킥 · <kbd>3</kbd> 변신
+        <b>2P</b> 방향키 · 숫자패드 <kbd>4</kbd> 약펀치 <kbd>5</kbd> 강펀치 <kbd>1</kbd> 약킥 <kbd>2</kbd> 강킥 <kbd>3</kbd> 기 (숫자패드가 없으면 <kbd>7</kbd>
+        <kbd>8</kbd>
+        <kbd>9</kbd>
+        <kbd>0</kbd>
+        <kbd>-</kbd>)
       </li>
-      <li>상대 반대쪽을 누르면 막기, 아래+뒤는 앉아 막기 (다리 공격은 앉아서 막아야 해요). 아래+킥은 다리 걸기.</li>
+      <li>컴퓨터와 할 때는 방향키 + <kbd>1</kbd>~<kbd>5</kbd>(약펀치·강펀치·약킥·강킥·기)로도 할 수 있어요.</li>
+      <li>상대 반대쪽을 누르면 막기, 아래+뒤는 앉아 막기 (다리 공격은 앉아서 막아야 해요).</li>
       <li>
-        기술 커맨드 (바라보는 쪽 기준): <b>{COMMANDS.move1}</b> · <b>{COMMANDS.move2}</b> · <b>{COMMANDS.move3}</b>
+        <b>이어 치기</b>: 공격이 맞으면 다음 공격으로 끊어 이어져요. <b>{COMMANDS.chain}</b>
       </li>
       <li>
-        때리고 맞으면 변신 게이지가 찹니다. 가득 차면 <b>펀치+킥 동시에</b>(또는 변신 키)로 공룡 변신! 변신 중에는 더 세지고 <b>{COMMANDS.super}</b> 초필살기를 쓸 수 있어요.
+        기술 커맨드 (방향키를 하나씩 차례로, 바라보는 쪽 기준): <b>{COMMANDS.move1}</b> · <b>{COMMANDS.move2}</b> · <b>{COMMANDS.move3}</b>
+      </li>
+      <li>
+        <b>기 모으기</b>: 기 버튼을 누르고 있으면 게이지가 차요 (그동안은 무방비). 때리면 맞을 때보다 더 많이 차요. 가득 차면 기 버튼을 한 번 더 눌러 공룡 변신! 변신 중에는 더 세지고 <b>{COMMANDS.super}</b> 초필살기를 쓸 수 있어요.
       </li>
     </ul>
   );
@@ -281,6 +299,18 @@ export function MoveList({ c }: { c: CharDef }) {
           <td>{c.dinoName} 변신</td>
           <td>
             <code>{COMMANDS.beast}</code>
+          </td>
+        </tr>
+        <tr>
+          <td>기 모으기</td>
+          <td>
+            <code>{COMMANDS.charge}</code>
+          </td>
+        </tr>
+        <tr>
+          <td>이어 치기</td>
+          <td>
+            <code>{COMMANDS.chain}</code>
           </td>
         </tr>
       </tbody>
@@ -389,7 +419,7 @@ function Fight({ options, stage, ai: aiLevel, story, versus, onEnd, onMenu }: { 
   const keys = useRef(new Set<string>());
   /** 아주 짧게 눌렀다 뗀 키도 한 프레임은 눌린 것으로 */
   const tapped = useRef(new Set<string>());
-  const touch = useRef<RawInput & { cmd?: Command }>({ ...NO_INPUT });
+  const touch = useRef<RawInput & { cmd?: Command }>({ ...NO_RAW });
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
   const pausedRef = useRef(false);
@@ -423,40 +453,31 @@ function Fight({ options, stage, ai: aiLevel, story, versus, onEnd, onMenu }: { 
     };
   }, []);
 
-  const read = (map: Record<string, Key>) => {
-    const r: RawInput & { beast: boolean } = { left: false, right: false, up: false, down: false, punch: false, kick: false, beast: false };
-    for (const [code, k] of Object.entries(map)) if (keys.current.has(code) || tapped.current.has(code)) r[k] = true;
+  const read = (...maps: Record<string, Key>[]) => {
+    const r: RawInput = { ...NO_RAW };
+    for (const map of maps) for (const [code, k] of Object.entries(map)) if (keys.current.has(code) || tapped.current.has(code)) r[k] = true;
     return r;
   };
-  const prevBeast = useRef([false, false]);
 
   /** 키 입력 → 커맨드 해석 → 엔진 입력 */
-  const human = (id: 0 | 1, r: RawInput & { beast?: boolean }, dt: number, extra?: Command): Input => {
+  const human = (id: 0 | 1, r: RawInput, dt: number, extra?: Command): Input => {
     const g = gameRef.current;
     let cmd = readers.current[id].feed(r, g.fighters[id].facing, dt);
-    // 변신 키 (누른 순간만)
-    if (r.beast && !prevBeast.current[id]) cmd = 'beast';
-    prevBeast.current[id] = !!r.beast;
     if (extra) cmd = extra;
-    return { left: r.left, right: r.right, up: r.up, down: r.down, punch: r.punch, kick: r.kick, cmd };
+    return { ...r, cmd };
   };
 
   useLoop((dt) => {
     const g = gameRef.current;
     time.current += dt;
     if (!pausedRef.current) {
-      const k1 = read(P1);
       const t = touch.current;
       const tcmd = t.cmd;
       t.cmd = undefined;
-      let p2: Input;
-      let r1 = { ...k1, left: k1.left || t.left, right: k1.right || t.right, up: k1.up || t.up, down: k1.down || t.down, punch: k1.punch || t.punch, kick: k1.kick || t.kick };
-      if (!versus) {
-        // 컴퓨터와 할 때는 방향키·숫자도 1P
-        const k2 = read(P2);
-        r1 = { left: r1.left || k2.left, right: r1.right || k2.right, up: r1.up || k2.up, down: r1.down || k2.down, punch: r1.punch || k2.punch, kick: r1.kick || k2.kick, beast: r1.beast || k2.beast };
-        p2 = ai.current ? ai.current.input(g, dt) : NO_INPUT;
-      } else p2 = human(1, read(P2), dt);
+      const k1 = versus ? read(P1) : read(P1, ALT1);
+      const r1: RawInput = { ...k1 };
+      for (const k of Object.keys(NO_RAW) as Key[]) r1[k] = k1[k] || t[k];
+      const p2 = versus ? human(1, read(P2), dt) : ai.current ? ai.current.input(g, dt) : NO_INPUT;
       const p1 = human(0, r1, dt, tcmd);
       tapped.current.clear();
       g.step(dt, [p1, p2]);
@@ -536,20 +557,28 @@ function Fight({ options, stage, ai: aiLevel, story, versus, onEnd, onMenu }: { 
           <button className="r" {...hold('right')}>▶</button>
         </div>
         <div className="pad-right wide">
-          <button {...hold('punch')}>👊</button>
-          <button {...hold('kick')}>🦶</button>
+          <button className="atk" {...hold('lp')}>약펀치</button>
+          <button className="atk strong" {...hold('hp')}>강펀치</button>
           <button className="mini" {...tapCmd('move1')}>
             기술1
           </button>
+          <button className="atk" {...hold('lk')}>약킥</button>
+          <button className="atk strong" {...hold('hk')}>강킥</button>
           <button className="mini" {...tapCmd('move2')}>
             기술2
           </button>
           <button className="mini" {...tapCmd('move3')}>
             기술3
           </button>
-          <button className="special" {...tapCmd(me.beast ? 'super' : 'beast')}>
-            {me.beast ? '필살' : '변신'}
-          </button>
+          {me.beast ? (
+            <button className="special" {...tapCmd('super')}>
+              필살
+            </button>
+          ) : (
+            <button className="special" {...hold('charge')}>
+              기
+            </button>
+          )}
         </div>
       </div>
     </>

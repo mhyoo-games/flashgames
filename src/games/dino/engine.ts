@@ -1,6 +1,6 @@
 // 햄스터 다이노 파이트: 1:1 격투 규칙 (그리기와 분리 → 테스트 가능)
 import { PLAYABLE, type CharDef, type MoveDef, type Slot } from './chars.ts';
-import type { Command } from './input.ts';
+import type { Button, Command } from './input.ts';
 
 export const W = 960;
 export const H = 540;
@@ -17,16 +17,21 @@ export interface Input {
   right: boolean;
   up: boolean;
   down: boolean;
-  punch: boolean;
-  kick: boolean;
+  /** 약펀치 · 강펀치 · 약킥 · 강킥 */
+  lp: boolean;
+  hp: boolean;
+  lk: boolean;
+  hk: boolean;
+  /** 기 모으기 (누르고 있기). 게이지가 가득일 때 누르면 변신 */
+  charge: boolean;
   /** 커맨드로 완성된 기술 (사람은 CommandReader가, 컴퓨터는 직접 넣는다) */
   cmd?: Command;
 }
 
-export const NO_INPUT: Input = { left: false, right: false, up: false, down: false, punch: false, kick: false };
+export const NO_INPUT: Input = { left: false, right: false, up: false, down: false, lp: false, hp: false, lk: false, hk: false, charge: false };
 
-type Normal = 'punch1' | 'punch2' | 'punch3' | 'kick' | 'airpunch' | 'airkick' | 'lowkick';
-export type Action = 'idle' | 'walk' | 'back' | 'jump' | 'crouch' | 'block' | Normal | 'move' | 'transform' | 'hit' | 'ko' | 'win';
+export type Normal = 'lp' | 'hp' | 'lk' | 'hk' | 'clp' | 'upper' | 'lowkick' | 'sweep' | 'airpunch' | 'airkick';
+export type Action = 'idle' | 'walk' | 'back' | 'jump' | 'crouch' | 'block' | 'charge' | Normal | 'move' | 'transform' | 'hit' | 'ko' | 'win';
 
 interface Hit {
   startup: number;
@@ -40,22 +45,45 @@ interface Hit {
   stun: number;
   /** 앉아서 막아야 하는 공격 */
   low?: boolean;
+  /** 맞으면 띄운다 */
+  big?: boolean;
+  /** 연계 순서: 낮은 쪽에서 높은 쪽으로 이어진다 (약펀치 1 → 약킥 2 → 강펀치 3 → 강킥 4) */
+  order: number;
 }
 
 export const NORMALS: Record<Normal, Hit> = {
-  punch1: { startup: 0.06, active: 0.08, recovery: 0.12, damage: 5, reach: 52, height: -70, knock: 90, stun: 0.24 },
-  punch2: { startup: 0.06, active: 0.08, recovery: 0.14, damage: 6, reach: 54, height: -70, knock: 110, stun: 0.26 },
-  punch3: { startup: 0.1, active: 0.1, recovery: 0.28, damage: 10, reach: 60, height: -65, knock: 420, stun: 0.45 },
-  kick: { startup: 0.12, active: 0.1, recovery: 0.24, damage: 10, reach: 66, height: -40, knock: 300, stun: 0.38 },
-  lowkick: { startup: 0.1, active: 0.1, recovery: 0.22, damage: 7, reach: 64, height: -14, knock: 160, stun: 0.32, low: true },
-  airpunch: { startup: 0.05, active: 0.22, recovery: 0.08, damage: 7, reach: 50, height: -60, knock: 200, stun: 0.3 },
-  airkick: { startup: 0.06, active: 0.28, recovery: 0.08, damage: 9, reach: 58, height: -30, knock: 240, stun: 0.32 },
+  lp: { startup: 0.05, active: 0.07, recovery: 0.11, damage: 4, reach: 50, height: -72, knock: 70, stun: 0.32, order: 1 },
+  lk: { startup: 0.07, active: 0.08, recovery: 0.14, damage: 5, reach: 62, height: -44, knock: 90, stun: 0.32, order: 2 },
+  hp: { startup: 0.1, active: 0.09, recovery: 0.24, damage: 9, reach: 60, height: -70, knock: 200, stun: 0.42, order: 3 },
+  hk: { startup: 0.13, active: 0.1, recovery: 0.3, damage: 11, reach: 74, height: -50, knock: 380, stun: 0.46, order: 4, big: true },
+  clp: { startup: 0.05, active: 0.07, recovery: 0.11, damage: 4, reach: 50, height: -40, knock: 60, stun: 0.3, order: 1 },
+  lowkick: { startup: 0.07, active: 0.08, recovery: 0.15, damage: 5, reach: 64, height: -12, knock: 80, stun: 0.3, low: true, order: 2 },
+  upper: { startup: 0.09, active: 0.12, recovery: 0.28, damage: 9, reach: 46, height: -108, knock: 160, stun: 0.45, order: 3, big: true },
+  sweep: { startup: 0.12, active: 0.1, recovery: 0.32, damage: 10, reach: 76, height: -12, knock: 260, stun: 0.5, low: true, order: 4, big: true },
+  airpunch: { startup: 0.05, active: 0.22, recovery: 0.08, damage: 7, reach: 50, height: -60, knock: 200, stun: 0.34, order: 9 },
+  airkick: { startup: 0.07, active: 0.28, recovery: 0.08, damage: 9, reach: 58, height: -30, knock: 240, stun: 0.36, order: 9 },
 };
+
+/** 버튼과 자세로 고르는 기본기 */
+export function normalFor(btn: Button, ground: boolean, down: boolean): Normal {
+  if (!ground) return btn === 'lp' || btn === 'hp' ? 'airpunch' : 'airkick';
+  if (down) return ({ lp: 'clp', hp: 'upper', lk: 'lowkick', hk: 'sweep' } as const)[btn];
+  return btn;
+}
 
 export const GAUGE_MAX = 100;
 /** 변신 중 게이지가 줄어드는 속도 (초당) */
 const GAUGE_DRAIN = 5.5;
-const SUPER_COST = 50;
+export const SUPER_COST = 50;
+/** 기 모으기: 초당 차는 양 */
+export const CHARGE_RATE = 24;
+/** 때리고 맞을 때 차는 양 (피해 1당) — 때린 쪽이 더 많이 찬다 */
+export const GAIN = { hitter: 0.5, hurt: 0.25, blocker: 0.12, blocked: 0.2 };
+/** 변신 동작 시간과 터지는 순간 */
+export const TRANSFORM_TIME = 1.0;
+export const TRANSFORM_BURST = 0.55;
+/** 한 번 이어 치기에서 약공격은 3번까지 */
+const LIGHT_CHAIN = 3;
 
 export interface Fighter {
   id: 0 | 1;
@@ -88,6 +116,14 @@ export interface Fighter {
   countered: boolean;
   /** 아래를 누르고 있는지 (앉아 막기) */
   crouching: boolean;
+  /** 이어 치기에서 약공격을 쓴 수 */
+  chain: number;
+  /** 미리 누른 버튼·커맨드 (경직 중에 눌러도 놓치지 않게) */
+  buf?: Button;
+  bufT: number;
+  bufCmd?: Command;
+  bufCmdT: number;
+  bufCharge: number;
 }
 
 export type ShotKind = 'seed' | 'plate' | 'wind' | 'water' | 'wave' | 'shock' | 'meteor';
@@ -117,7 +153,7 @@ export interface Spark {
   kind: 'hit' | 'block' | 'big' | 'transform' | 'counter';
 }
 
-export type GameEvent = 'hit' | 'bighit' | 'block' | 'swing' | 'jump' | 'special' | 'super' | 'transform' | 'revert' | 'counter' | 'ko' | 'round' | 'fight' | 'timeup' | 'win' | 'lose';
+export type GameEvent = 'charge' | 'full' | 'burst' | 'hit' | 'bighit' | 'block' | 'swing' | 'jump' | 'special' | 'super' | 'transform' | 'revert' | 'counter' | 'ko' | 'round' | 'fight' | 'timeup' | 'win' | 'lose';
 export type Phase = 'intro' | 'fight' | 'ko' | 'over';
 
 export interface FightOptions {
@@ -147,6 +183,8 @@ export class DinoFight {
   callout?: { id: 0 | 1; text: string; t: number };
   winner?: 0 | 1;
   private prev: [Input, Input] = [NO_INPUT, NO_INPUT];
+  /** 버튼을 누른 순간을 알기 위한 지난 입력 (경직 중에도 갱신) */
+  private prevRaw: [Input, Input] = [NO_INPUT, NO_INPUT];
   private readonly hpScale: [number, number];
 
   constructor(opts: FightOptions = {}) {
@@ -161,7 +199,7 @@ export class DinoFight {
 
   private make(id: 0 | 1, char: CharDef): Fighter {
     const maxHp = Math.round(char.hp * this.hpScale[id]);
-    return { id, char, x: 0, y: FLOOR, vx: 0, vy: 0, facing: id === 0 ? 1 : -1, hp: maxHp, maxHp, gauge: 0, beast: false, action: 'idle', t: 0, stun: 0, hitDone: false, hitCount: 0, nextTick: 0, comboWindow: 0, comboStep: 0, wins: 0, combo: 0, comboTimer: 0, countered: false, crouching: false };
+    return { id, char, x: 0, y: FLOOR, vx: 0, vy: 0, facing: id === 0 ? 1 : -1, hp: maxHp, maxHp, gauge: 0, beast: false, action: 'idle', t: 0, stun: 0, hitDone: false, hitCount: 0, nextTick: 0, comboWindow: 0, comboStep: 0, wins: 0, combo: 0, comboTimer: 0, countered: false, crouching: false, chain: 0, bufT: 0, bufCmdT: 0, bufCharge: 0 };
   }
 
   private startRound() {
@@ -174,7 +212,8 @@ export class DinoFight {
       f.t = 0;
       f.stun = 0;
       f.beast = false;
-      f.gauge = Math.min(f.gauge, 60);
+      f.gauge = Math.min(f.gauge, 50);
+      f.bufT = f.bufCmdT = f.bufCharge = 0;
       f.combo = 0;
     }
     a.x = W * 0.3;
@@ -229,12 +268,18 @@ export class DinoFight {
     return a in NORMALS || a === 'move';
   }
 
+  /** 맞히거나 막혀서 다음 공격으로 끊을 수 있는 때인지 (그리기·AI용) */
+  canChain(f: Fighter) {
+    return f.action in NORMALS && f.hitDone && f.action !== 'airpunch' && f.action !== 'airkick';
+  }
+
   /** 그리기용: 동작이 몇 % 진행됐는지 */
   progress(f: Fighter): number {
     if (f.action === 'move') {
       const mv = this.move(f)!;
       return Math.min(1, f.t / (mv.startup + mv.active));
     }
+    if (f.action === 'transform') return Math.min(1, f.t / TRANSFORM_TIME);
     if (!(f.action in NORMALS)) return 0;
     const h = this.normal(f, f.action as Normal);
     return Math.min(1, f.t / (h.startup + h.active));
@@ -277,6 +322,7 @@ export class DinoFight {
       if (this.phaseTime > 3) this.nextRound();
       return;
     }
+    this.bufferInputs(inputs);
     if (this.hitstop > 0) {
       this.hitstop -= dt;
       return;
@@ -295,6 +341,27 @@ export class DinoFight {
     this.physics(dt, inputs, true);
     this.prev = [{ ...inputs[0] }, { ...inputs[1] }];
     if (this.timer <= 0) this.timeUp();
+  }
+
+  /** 누른 순간을 기억해 둔다 (멈춤 중에 눌러도 다음 동작으로 이어지게) */
+  private bufferInputs(inputs: [Input, Input]) {
+    for (const f of this.fighters) {
+      const i = inputs[f.id];
+      const p = this.prevRaw[f.id];
+      // 같은 프레임에 여러 개면 센 공격을 고른다
+      for (const b of ['lp', 'lk', 'hp', 'hk'] as Button[]) {
+        if (i[b] && !p[b]) {
+          f.buf = b;
+          f.bufT = 0.15;
+        }
+      }
+      if (i.cmd) {
+        f.bufCmd = i.cmd;
+        f.bufCmdT = 0.2;
+      }
+      if (i.charge && !p.charge) f.bufCharge = 0.15;
+    }
+    this.prevRaw = [{ ...inputs[0] }, { ...inputs[1] }];
   }
 
   private physics(dt: number, inputs: [Input, Input], control: boolean) {
@@ -333,13 +400,19 @@ export class DinoFight {
 
   private update(f: Fighter, o: Fighter, inp: Input, prev: Input, dt: number, control: boolean) {
     f.t += dt;
-    f.comboWindow -= dt;
-    const pressed = (k: 'punch' | 'kick' | 'up') => inp[k] && !prev[k];
+    f.bufT -= dt;
+    f.bufCmdT -= dt;
+    f.bufCharge -= dt;
     const ground = this.grounded(f);
     const c = f.char;
     const fwd = f.facing > 0 ? inp.right : inp.left;
     const back = f.facing > 0 ? inp.left : inp.right;
     f.crouching = control && ground && inp.down;
+    const btn = control && f.bufT > 0 ? f.buf : undefined;
+    const cmd = control && f.bufCmdT > 0 ? f.bufCmd : undefined;
+    const useBtn = () => (f.bufT = 0);
+    const useCmd = () => (f.bufCmdT = 0);
+    const wantBeast = control && (f.bufCharge > 0 || cmd === 'beast') && f.gauge >= GAUGE_MAX && !f.beast;
 
     if (f.action === 'ko' || f.action === 'win') {
       // 끝
@@ -347,37 +420,63 @@ export class DinoFight {
       f.stun -= dt;
       if (f.stun <= 0 && ground) this.set(f, 'idle');
     } else if (f.action === 'transform') {
-      if (f.t > 0.7) this.set(f, 'idle');
+      if (f.t >= TRANSFORM_BURST && !f.hitDone) this.burst(f, o);
+      if (f.t > TRANSFORM_TIME) this.set(f, 'idle');
     } else if (f.action === 'move') {
-      this.updateMove(f, o, dt);
+      // 연계 중 초필살기로 이어 쓰기
+      if (cmd === 'super' && f.slot !== 'super' && f.hitCount > 0 && this.tryCommand(f, o, 'super')) useCmd();
+      else this.updateMove(f, o, dt);
     } else if (f.action in NORMALS) {
       const kind = f.action as Normal;
       const h = this.normal(f, kind);
-      if (f.t >= h.startup && f.t < h.startup + h.active && !f.hitDone) this.tryHit(f, o, h.reach, h.height, h.damage, h.knock, h.stun, kind === 'punch3' || kind === 'kick', 22, false, h.low);
-      const done = f.t >= h.startup + h.active + h.recovery || ((kind === 'airkick' || kind === 'airpunch') && ground && f.t > 0.05);
-      if (done) {
-        if (kind === 'punch1' || kind === 'punch2') {
-          f.comboWindow = 0.32;
-          f.comboStep = kind === 'punch1' ? 1 : 2;
-        } else f.comboStep = 0;
-        this.set(f, ground ? 'idle' : 'jump');
-      } else if (control && (kind === 'punch1' || kind === 'punch2') && pressed('punch') && !inp.cmd && f.t > h.startup + h.active * 0.5) {
-        this.set(f, kind === 'punch1' ? 'punch2' : 'punch3');
-        this.events.push('swing');
+      if (f.t >= h.startup && f.t < h.startup + h.active && !f.hitDone) this.tryHit(f, o, h.reach, h.height, h.damage, h.knock, h.stun, !!h.big, 22, false, h.low);
+      const air = kind === 'airkick' || kind === 'airpunch';
+      // 맞히거나 막히면 다음 공격·기술로 끊고 이어 칠 수 있다
+      if (f.hitDone && !air && control) {
+        if (cmd && cmd !== 'beast' && this.tryCommand(f, o, cmd)) {
+          useCmd();
+          useBtn();
+          return this.integrate(f, inp, dt);
+        }
+        if (btn) {
+          const next = normalFor(btn, true, inp.down);
+          const no = NORMALS[next].order;
+          const light = no <= 2;
+          if ((no > h.order || (light && no === h.order && f.chain < LIGHT_CHAIN)) && (!light || f.chain < LIGHT_CHAIN)) {
+            useBtn();
+            if (light) f.chain++;
+            this.set(f, next);
+            this.events.push('swing');
+            return this.integrate(f, inp, dt);
+          }
+        }
       }
-      // 펀치를 막 누르자마자 킥도 누르면 변신으로 바꿔 준다
-      if (control && inp.cmd === 'beast' && f.t < 0.12) this.tryCommand(f, o, 'beast');
+      if (f.t >= h.startup + h.active + h.recovery || (air && ground && f.t > 0.05)) this.set(f, ground ? 'idle' : 'jump');
     } else if (control) {
       if (ground) f.facing = o.x >= f.x ? 1 : -1;
-      if (inp.cmd && this.tryCommand(f, o, inp.cmd)) {
-        // 기술 시작
-      } else if (pressed('punch')) {
-        if (!ground) this.set(f, 'airpunch');
-        else this.set(f, f.comboWindow > 0 && f.comboStep === 1 ? 'punch2' : f.comboWindow > 0 && f.comboStep === 2 ? 'punch3' : 'punch1');
+      if (f.action !== 'charge') f.chain = 0;
+      if (wantBeast && ground) {
+        f.bufCharge = 0;
+        useCmd();
+        this.tryCommand(f, o, 'beast');
+      } else if (cmd && cmd !== 'beast' && this.tryCommand(f, o, cmd)) {
+        useCmd();
+        useBtn();
+      } else if (btn) {
+        useBtn();
+        const n = normalFor(btn, ground, inp.down);
+        f.chain = NORMALS[n].order <= 2 ? 1 : 0;
+        this.set(f, n);
         this.events.push('swing');
-      } else if (pressed('kick')) {
-        this.set(f, !ground ? 'airkick' : inp.down ? 'lowkick' : 'kick');
-        this.events.push('swing');
+      } else if (ground && inp.charge && !f.beast && f.gauge < GAUGE_MAX) {
+        // 기 모으기: 그 자리에 서서 게이지를 채운다 (그동안 무방비)
+        if (f.action !== 'charge') {
+          this.set(f, 'charge');
+          this.events.push('charge');
+        }
+        f.vx = 0;
+        f.gauge = Math.min(GAUGE_MAX, f.gauge + CHARGE_RATE * dt);
+        if (f.gauge >= GAUGE_MAX) this.events.push('full');
       } else if (ground && back && this.threatened(f, o)) {
         if (f.action !== 'block') this.set(f, 'block');
         f.vx = 0;
@@ -385,7 +484,7 @@ export class DinoFight {
         if (f.action !== 'crouch' && f.action !== 'block') this.set(f, 'crouch');
         f.vx = 0;
         if (back && this.threatened(f, o)) this.set(f, 'block');
-      } else if (ground && pressed('up')) {
+      } else if (ground && inp.up && !prev.up) {
         f.vy = -c.jump * (f.beast && c.dino === 'ptera' ? 1.15 : 1);
         f.vx = (fwd ? 1 : back ? -1 : 0) * f.facing * c.walk * 1.1;
         this.set(f, 'jump');
@@ -396,16 +495,35 @@ export class DinoFight {
         f.vx = dir * c.walk * (toward ? 1 : 0.7) * (f.beast ? 1.12 : 1);
         const want: Action = dir ? (toward ? 'walk' : 'back') : 'idle';
         if (f.action !== want) this.set(f, want);
-      } else if (!ground && inp.cmd) {
-        this.tryCommand(f, o, inp.cmd);
       }
     } else if (ground && f.action !== 'idle') {
       this.set(f, 'idle');
     }
+    this.integrate(f, inp, dt);
+  }
 
+  /** 변신이 터지는 순간: 가까운 상대를 밀어낸다 */
+  private burst(f: Fighter, o: Fighter) {
+    f.hitDone = true;
+    if (Math.abs(o.x - f.x) < 170 && o.action !== 'ko') {
+      o.vx = Math.sign(o.x - f.x || 1) * 520;
+      if (o.action !== 'transform') {
+        o.stun = 0.3;
+        this.set(o, 'hit');
+      }
+    }
+    this.sparks.push({ x: f.x, y: f.y - 70, t: 0, kind: 'transform' });
+    this.events.push('burst');
+    this.shake = 12;
+  }
+
+  private integrate(f: Fighter, inp: Input, dt: number) {
+    void inp;
+    const c = f.char;
+    const ground = this.grounded(f);
     const mv = this.move(f);
     const moving = f.action === 'move' && mv && (mv.type === 'rush' || mv.type === 'dive' || mv.type === 'rising') && f.t >= mv.startup;
-    if (ground && !moving && (DinoFight.isAttack(f.action) || f.action === 'block' || f.action === 'crouch' || f.action === 'hit' || f.action === 'ko' || f.action === 'transform' || !control)) {
+    if (ground && !moving && (DinoFight.isAttack(f.action) || f.action === 'block' || f.action === 'crouch' || f.action === 'charge' || f.action === 'hit' || f.action === 'ko' || f.action === 'transform' || f.action === 'idle')) {
       f.vx *= Math.pow(0.0005, dt);
     }
     // 프테라는 변신하면 천천히 떨어진다 (활공)
@@ -427,14 +545,13 @@ export class DinoFight {
       f.beast = true;
       this.set(f, 'transform');
       f.vx = 0;
-      // 변신 충격으로 상대를 밀어낸다
-      if (Math.abs(o.x - f.x) < 120) o.vx = Math.sign(o.x - f.x || 1) * 420;
-      this.sparks.push({ x: f.x, y: f.y - 60, t: 0, kind: 'transform' });
       this.callout = { id: f.id, text: `${f.char.dinoName} 변신!`, t: 0 };
       this.events.push('transform');
-      this.shake = 8;
+      this.superFlash = 0.35;
       return true;
     }
+    const mv0 = f.char.moves[cmd];
+    if (!this.grounded(f) && mv0.type !== 'dive') return false;
     if (cmd === 'super') {
       if (!f.beast || f.gauge < SUPER_COST) return false;
       f.gauge -= SUPER_COST;
@@ -442,9 +559,7 @@ export class DinoFight {
       this.hitstop = 0.35;
       this.events.push('super');
     } else this.events.push('special');
-    const mv = f.char.moves[cmd];
-    // 공중에서는 급강하만
-    if (!this.grounded(f) && mv.type !== 'dive') return false;
+    const mv = mv0;
     f.slot = cmd;
     this.set(f, 'move');
     this.callout = { id: f.id, text: mv.name, t: 0 };
@@ -583,8 +698,12 @@ export class DinoFight {
   private applyHit(f: Fighter, o: Fighter, damage: number, knock: number, stun: number, x: number, y: number, big: boolean, unblockable = false, low = false) {
     if (o.action === 'ko') return;
     const gain = (who: Fighter, n: number) => {
-      if (!who.beast) who.gauge = Math.min(GAUGE_MAX, who.gauge + n);
+      if (who.beast || who.gauge >= GAUGE_MAX) return;
+      who.gauge = Math.min(GAUGE_MAX, who.gauge + n);
+      if (who.gauge >= GAUGE_MAX) this.events.push('full');
     };
+    // 변신하는 동안은 무적
+    if (o.action === 'transform') return;
     // 받아치기 자세
     const omv = this.move(o);
     if (o.action === 'move' && omv?.type === 'counter' && o.t >= omv.startup && o.t < omv.startup + omv.active && !o.countered && !unblockable) {
@@ -602,8 +721,8 @@ export class DinoFight {
     if (blocked) {
       o.hp -= Math.max(1, Math.round(damage * 0.12));
       o.vx = knock * 0.5;
-      gain(o, damage * 0.6);
-      gain(f, damage * 0.3);
+      gain(o, damage * GAIN.blocker);
+      gain(f, damage * GAIN.blocked);
       this.sparks.push({ x, y, t: 0, kind: 'block' });
       this.events.push('block');
       this.hitstop = 0.04;
@@ -613,13 +732,17 @@ export class DinoFight {
       this.sparks.push({ x, y, t: 0, kind: 'block' });
       this.events.push('hit');
     } else {
-      o.hp -= damage;
+      // 이어 맞을수록 피해가 줄어든다 · 기 모으는 중에 맞으면 더 아프다
+      const inCombo = o.action === 'hit';
+      if (!inCombo) f.combo = 0;
+      const scaled = Math.max(1, Math.round(damage * (inCombo ? Math.max(0.5, 1 - 0.1 * f.combo) : o.action === 'charge' ? 1.2 : 1)));
+      o.hp -= scaled;
       o.vx = knock;
       if (big || !this.grounded(o)) o.vy = -280;
       o.stun = stun;
       this.set(o, 'hit');
-      gain(o, damage * 1.3);
-      gain(f, damage * 1.1);
+      gain(o, scaled * GAIN.hurt);
+      gain(f, scaled * GAIN.hitter);
       f.combo++;
       f.comboTimer = 1;
       this.sparks.push({ x, y, t: 0, kind: big ? 'big' : 'hit' });

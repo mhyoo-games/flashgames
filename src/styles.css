@@ -639,9 +639,28 @@ h2 {
   font-style: italic;
 }
 .pad-right.wide {
-  flex-wrap: wrap;
-  max-width: 200px;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(3, 52px);
+  gap: 8px;
+  justify-content: end;
+}
+.pad-right.wide .special {
+  grid-column: span 2;
+  width: 100%;
+  border-radius: 26px;
+}
+.touchpad .atk {
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.touchpad .atk.strong {
+  background: linear-gradient(#ff9b6b, #e0553a);
+}
+.pause-menu {
+  overflow-y: auto;
+  justify-content: flex-start;
+  padding: 16px 0;
 }
 .touchpad .mini {
   font-size: 12px;

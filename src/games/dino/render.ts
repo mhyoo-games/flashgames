@@ -2,151 +2,11 @@
 // 햄스터는 둥근 몸·큰 머리·반짝이는 눈. 그라데이션 음영·외곽선·하이라이트로 입체감을 낸다.
 // 변신하면 공룡 특징(뿔·프릴·등판·꼬리·날개·돛…)이 돋아난다.
 import type { CharDef, Dino } from './chars.ts';
-import { DinoFight, FLOOR, GAUGE_MAX, H, W, type Fighter, type Projectile } from './engine.ts';
+import { DinoFight, FLOOR, GAUGE_MAX, H, TRANSFORM_BURST, W, type Fighter, type Projectile } from './engine.ts';
+import { basePose, blinking, easeOutBack, livePose, type Eyes, type Mouth, type Pose } from './pose.ts';
 import type { StageId } from './chars.ts';
 
 type Ctx = CanvasRenderingContext2D;
-
-interface Look {
-  lean: number;
-  squash: number;
-  /** 몸 전체 위로 띄움 */
-  lift: number;
-  /** 앞발 위치 (몸 기준) */
-  paw: [number, number];
-  paw2: [number, number];
-  foot: [number, number];
-  foot2: [number, number];
-  eyes: 'normal' | 'angry' | 'hurt' | 'ko' | 'happy';
-  spin: number;
-  glow?: string;
-  /** 앞발이 길게 뻗었는지 (팔 그리기) */
-  reachArm: boolean;
-}
-
-function lookOf(g: DinoFight, f: Fighter, time: number): Look {
-  const L: Look = { lean: 0, squash: 1, lift: 0, paw: [28, -52], paw2: [12, -48], foot: [18, -3], foot2: [-12, -3], eyes: f.beast ? 'angry' : 'normal', spin: 0, reachArm: false };
-  const p = g.progress(f);
-  const e = 1 - Math.pow(1 - p, 3);
-  const t = f.t;
-  switch (f.action) {
-    case 'idle':
-      L.squash = 1 + Math.sin(time * 5 + f.id) * 0.025;
-      L.paw = [26, -58 + Math.sin(time * 5) * 2];
-      break;
-    case 'walk':
-    case 'back': {
-      const w = Math.sin(t * 15);
-      L.foot = [18 + w * 10, -3 - Math.max(0, w) * 6];
-      L.foot2 = [-12 - w * 10, -3 - Math.max(0, -w) * 6];
-      L.lift = Math.abs(w) * 3;
-      L.lean = f.action === 'back' ? -0.08 : 0.06;
-      break;
-    }
-    case 'jump':
-      L.squash = f.vy < 0 ? 1.08 : 0.96;
-      L.foot = [14, -14];
-      L.foot2 = [-8, -12];
-      L.paw = [24, -70];
-      break;
-    case 'crouch':
-      L.squash = 0.72;
-      L.paw = [26, -40];
-      break;
-    case 'block':
-      L.squash = f.crouching ? 0.72 : 1;
-      L.lean = -0.06;
-      L.paw = [32, f.crouching ? -62 : -82];
-      L.paw2 = [26, f.crouching ? -56 : -74];
-      break;
-    case 'punch1':
-    case 'punch2':
-    case 'punch3': {
-      const big = f.action === 'punch3';
-      L.lean = 0.06 + e * (big ? 0.18 : 0.1);
-      L.paw = [28 + e * (big ? 40 : 32), -66 - (big ? e * 6 : 0)];
-      L.reachArm = true;
-      L.foot = [26, -3];
-      break;
-    }
-    case 'kick':
-      L.lean = -0.12 * e;
-      L.foot = [20 + e * 42, -3 - e * 34];
-      break;
-    case 'lowkick':
-      L.squash = 0.75;
-      L.foot = [20 + e * 46, -6];
-      break;
-    case 'airpunch':
-      L.paw = [28 + e * 30, -60 + e * 10];
-      L.reachArm = true;
-      L.foot = [10, -16];
-      break;
-    case 'airkick':
-      L.lean = 0.2;
-      L.foot = [22 + e * 34, -12 + e * 6];
-      L.foot2 = [-6, -24];
-      break;
-    case 'transform':
-      L.squash = 1 + Math.sin(t * 40) * 0.06;
-      L.paw = [30, -96];
-      L.paw2 = [-10, -96];
-      L.glow = f.char.accent;
-      L.eyes = 'angry';
-      break;
-    case 'move': {
-      const mv = g.move(f)!;
-      L.eyes = 'angry';
-      if (mv.type === 'shot' || mv.type === 'meteor') {
-        L.paw = [30 + e * 16, mv.type === 'meteor' ? -100 : -62];
-        L.paw2 = [24 + e * 14, mv.type === 'meteor' ? -96 : -56];
-        L.reachArm = true;
-        L.glow = t < mv.startup ? f.char.accent : undefined;
-      } else if (mv.type === 'rush') {
-        L.lean = 0.35;
-        L.paw = [52, -58];
-        L.reachArm = true;
-      } else if (mv.type === 'rising') {
-        L.squash = 1.12;
-        L.paw = [30, -118];
-        L.reachArm = true;
-        L.lean = -0.05;
-      } else if (mv.type === 'spin') {
-        L.spin = t * 22;
-      } else if (mv.type === 'slam') {
-        const down = t > mv.startup;
-        L.squash = down ? 0.82 : 1.06;
-        L.paw = down ? [38, -20] : [20, -110];
-        L.paw2 = down ? [28, -18] : [0, -108];
-      } else if (mv.type === 'dive') {
-        L.lean = 0.7;
-        L.foot = [40, -20];
-      } else if (mv.type === 'counter') {
-        L.paw = [34, -80];
-        L.paw2 = [30, -70];
-        L.glow = '#ffffff';
-        L.lean = -0.08;
-      }
-      if (f.slot === 'super') L.glow = L.glow ?? f.char.accent;
-      break;
-    }
-    case 'hit':
-      L.lean = -0.3;
-      L.eyes = 'hurt';
-      L.squash = 0.92;
-      L.paw = [10, -70];
-      break;
-    case 'ko':
-      L.eyes = 'ko';
-      break;
-    case 'win':
-      L.eyes = 'happy';
-      L.lift = Math.abs(Math.sin(time * 6)) * 14;
-      L.paw = [24, -112];
-      break;
-  }
-  return L;
-}
 
 function shade(hex: string, amt: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -590,16 +450,150 @@ function accessory(ctx: Ctx, c: CharDef, hx: number, hy: number, time: number) {
   }
 }
 
-function eyesOf(ctx: Ctx, mood: Look['eyes'], hx: number, hy: number) {
+export interface HamsterOpts {
+  x: number;
+  y: number;
+  facing: number;
+  size: number;
+  beast: boolean;
+  pose: Pose;
+  time: number;
+  /** 하얗게 번쩍 (0~1) */
+  flash?: number;
+  /** 쓰러지는 진행 */
+  ko?: number;
+  /** 공룡 특징이 돋아난 정도 (0~1, 넘치면 살짝 커짐) */
+  grow?: number;
+  seed?: number;
+  /** 그림자 생략 */
+  noShadow?: boolean;
+}
+
+/** 두 마디 팔다리: 시작점에서 목표까지, 관절을 bend 쪽으로 굽힌다. 멀면 조금 늘어난다 */
+function limb(ax: number, ay: number, tx: number, ty: number, l1: number, l2: number, bend: number, stretch: number) {
+  let dx = tx - ax;
+  let dy = ty - ay;
+  let d = Math.hypot(dx, dy) || 0.001;
+  const s = Math.min(stretch, Math.max(1, d / (l1 + l2)));
+  const L1 = l1 * s;
+  const L2 = l2 * s;
+  if (d > L1 + L2) {
+    dx *= (L1 + L2) / d;
+    dy *= (L1 + L2) / d;
+    d = L1 + L2;
+  }
+  const a = Math.atan2(dy, dx);
+  const b = Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d))));
+  return { ex: ax + Math.cos(a + bend * b) * L1, ey: ay + Math.sin(a + bend * b) * L1, hx: ax + dx, hy: ay + dy };
+}
+
+/** 털 색 관절 (외곽선 → 채우기 → 윗면 밝게) */
+function tube(ctx: Ctx, pts: [number, number][], w: number, fill: string, line: string) {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.strokeStyle = line;
+  ctx.lineWidth = w + 5;
+  ctx.stroke();
+  ctx.strokeStyle = fill;
+  ctx.lineWidth = w;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = w * 0.35;
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0] - 1, pts[0][1] - w * 0.2);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0] - 1, pts[i][1] - w * 0.2);
+  ctx.stroke();
+}
+
+function paw(ctx: Ctx, x: number, y: number, ang: number, fist: boolean, line: string, claws: boolean) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  const g = ctx.createRadialGradient(-2, -3, 1, 0, 0, 10);
+  g.addColorStop(0, '#ffe3e3');
+  g.addColorStop(1, '#f7a9b0');
+  ctx.fillStyle = g;
+  ctx.strokeStyle = line;
+  ctx.lineWidth = 2.5;
+  ellipse(ctx, 0, 0, fist ? 9 : 8, fist ? 8.5 : 7);
+  ctx.fill();
+  ctx.stroke();
+  // 손가락 (주먹이면 접힌 금, 펴면 짧은 손가락)
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  if (fist) {
+    ctx.moveTo(4, -5);
+    ctx.lineTo(6, 0);
+    ctx.moveTo(2, 1);
+    ctx.lineTo(6, 4);
+  } else {
+    for (const a of [-0.6, 0, 0.6]) {
+      ctx.moveTo(Math.cos(a) * 7, Math.sin(a) * 7);
+      ctx.lineTo(Math.cos(a) * 11, Math.sin(a) * 11);
+    }
+  }
+  ctx.stroke();
+  if (claws) {
+    ctx.fillStyle = '#fff6dc';
+    ctx.lineWidth = 1.8;
+    for (const d of [-4, 2]) {
+      ctx.beginPath();
+      ctx.moveTo(7, d);
+      ctx.lineTo(16, d + 2);
+      ctx.lineTo(7, d + 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function footShape(ctx: Ctx, x: number, y: number, ang: number, line: string, back: boolean, talon: boolean) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  ctx.fillStyle = back ? '#e8939d' : '#ffb4bc';
+  ctx.strokeStyle = line;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.ellipse(5, -3, 14, 6.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ellipse(ctx, 3, -6, 7, 2);
+  ctx.fill();
+  // 발가락
+  ctx.fillStyle = back ? '#d97f8a' : '#f497a3';
+  for (const dx of [12, 16]) {
+    ellipse(ctx, dx, -4, 2.2, 2.2);
+    ctx.fill();
+  }
+  if (talon) {
+    ctx.fillStyle = '#fff6dc';
+    ctx.beginPath();
+    ctx.moveTo(6, -6);
+    ctx.quadraticCurveTo(16, -22, 22, -6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function eyesOf(ctx: Ctx, mood: Eyes, hx: number, hy: number, glowColor?: string) {
   const pairs: [number, number, number][] = [
     [hx + 8, hy - 4, 1],
     [hx + 30, hy - 2, 0.86],
   ];
   ctx.lineCap = 'round';
   for (const [x, y, s] of pairs) {
+    ctx.strokeStyle = '#2b1a12';
+    ctx.lineWidth = 3;
     if (mood === 'ko') {
-      ctx.strokeStyle = '#2b1a12';
-      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(x - 5 * s, y - 5 * s);
       ctx.lineTo(x + 5 * s, y + 5 * s);
@@ -608,281 +602,546 @@ function eyesOf(ctx: Ctx, mood: Look['eyes'], hx: number, hy: number) {
       ctx.stroke();
       continue;
     }
-    if (mood === 'hurt' || mood === 'happy') {
-      ctx.strokeStyle = '#2b1a12';
-      ctx.lineWidth = 3;
+    if (mood === 'hurt' || mood === 'happy' || mood === 'closed') {
       ctx.beginPath();
       if (mood === 'hurt') {
-        ctx.moveTo(x - 5 * s, y - 4 * s);
+        ctx.moveTo(x - 5 * s, y - 5 * s);
         ctx.lineTo(x + 4 * s, y);
-        ctx.lineTo(x - 5 * s, y + 4 * s);
-      } else {
-        ctx.arc(x, y + 2, 5 * s, Math.PI * 1.1, Math.PI * 1.9);
-      }
+        ctx.lineTo(x - 5 * s, y + 5 * s);
+      } else if (mood === 'happy') ctx.arc(x, y + 3, 6 * s, Math.PI * 1.1, Math.PI * 1.9);
+      else ctx.arc(x, y - 2, 6 * s, Math.PI * 0.15, Math.PI * 0.85);
       ctx.stroke();
       continue;
     }
-    ctx.fillStyle = '#1d1420';
-    ellipse(ctx, x, y, 6.5 * s, 8 * s);
+    const narrow = mood === 'focus' || mood === 'angry' ? 0.82 : 1;
+    if (glowColor) {
+      ctx.fillStyle = glowColor + '66';
+      ellipse(ctx, x, y, 11 * s, 12 * s * narrow);
+      ctx.fill();
+    }
+    const g = ctx.createRadialGradient(x - 2 * s, y - 3 * s, 1, x, y, 9 * s);
+    g.addColorStop(0, '#5a3a4a');
+    g.addColorStop(1, '#140c18');
+    ctx.fillStyle = g;
+    ellipse(ctx, x + 1 * s, y, 7 * s, 8.6 * s * narrow);
     ctx.fill();
     ctx.fillStyle = '#fff';
-    ellipse(ctx, x - 2 * s, y - 3 * s, 2.6 * s, 2.8 * s);
+    ellipse(ctx, x - 1.5 * s, y - 3.4 * s * narrow, 2.8 * s, 3 * s * narrow);
     ctx.fill();
-    ellipse(ctx, x + 2 * s, y + 3 * s, 1.2 * s, 1.2 * s);
+    ellipse(ctx, x + 3 * s, y + 3 * s * narrow, 1.3 * s, 1.3 * s);
     ctx.fill();
-    if (mood === 'angry') {
+    if (mood === 'angry' || mood === 'focus') {
+      // 눈썹 (안쪽이 내려간 화난 눈썹)
       ctx.strokeStyle = '#2b1a12';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3.2;
       ctx.beginPath();
       ctx.moveTo(x - 7 * s, y - 13 * s);
-      ctx.lineTo(x + 6 * s, y - 9 * s);
+      ctx.lineTo(x + 7 * s, y - (mood === 'angry' ? 8 : 10) * s);
       ctx.stroke();
     }
   }
 }
 
-/** 햄스터 한 마리 (발 위치가 기준점) */
-export function drawHamster(ctx: Ctx, c: CharDef, opts: { x: number; y: number; facing: number; size: number; beast: boolean; look: Look; time: number; flash?: boolean; ko?: number }) {
-  const { x, y, facing, size, beast, look: L, time } = opts;
-  const fur = c.fur;
-  const neckUp = beast && c.dino === 'brachio' ? 34 : 0;
-  ctx.save();
-  // 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
-  ellipse(ctx, x, FLOOR + 3, 44 * size * Math.max(0.45, 1 - (FLOOR - y) / 320), 8 * Math.min(1.4, size));
-  ctx.fill();
+function mouthOf(ctx: Ctx, m: Mouth, hx: number, hy: number, beast: boolean, dino: Dino) {
+  const x = hx + 30;
+  const y = hy + 12;
+  ctx.strokeStyle = '#5a2a20';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  switch (m) {
+    case 'smile':
+      if (beast && dino === 'trex') return;
+      ctx.beginPath();
+      ctx.arc(x - 3, y - 1, 3, 0, Math.PI);
+      ctx.arc(x + 3, y - 1, 3, 0, Math.PI);
+      ctx.stroke();
+      break;
+    case 'grit':
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.roundRect(x - 6, y - 1, 12, 5, 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - 6, y + 1.5);
+      ctx.lineTo(x + 6, y + 1.5);
+      ctx.stroke();
+      break;
+    case 'open':
+    case 'o':
+    case 'roar': {
+      const r = m === 'roar' ? 8 : m === 'open' ? 5 : 3.5;
+      ctx.fillStyle = '#7a1f2b';
+      ellipse(ctx, x, y + r * 0.5, r * (m === 'o' ? 0.9 : 1.1), r);
+      ctx.fill();
+      ctx.stroke();
+      if (m !== 'o') {
+        ctx.fillStyle = '#ff8fa3';
+        ellipse(ctx, x, y + r * 1.0, r * 0.6, r * 0.4);
+        ctx.fill();
+        // 햄스터 앞니
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x - 3, y - r * 0.5, 6, Math.max(3, r * 0.45));
+      }
+      break;
+    }
+  }
+}
 
-  ctx.translate(x, y - L.lift);
+/** 공룡 특징을 기준점에서 커지게 그리기 */
+function grown(ctx: Ctx, grow: number, ax: number, ay: number, draw: () => void) {
+  if (grow <= 0.01) return;
+  ctx.save();
+  ctx.translate(ax, ay);
+  ctx.scale(grow, grow);
+  ctx.translate(-ax, -ay);
+  draw();
+  ctx.restore();
+}
+
+/** 햄스터 한 마리 (발 위치가 기준점) */
+export function drawHamster(ctx: Ctx, c: CharDef, opts: HamsterOpts) {
+  const flash = opts.flash ?? 0;
+  if (flash > 0.01) {
+    // 따로 그린 뒤 하얗게 덮어 붙인다 (모양 그대로 번쩍)
+    const off = offscreen();
+    if (off) {
+      const o = off.getContext('2d')!;
+      o.setTransform(1, 0, 0, 1, 0, 0);
+      o.clearRect(0, 0, off.width, off.height);
+      if (!opts.noShadow) shadow(ctx, opts);
+      drawHamsterRaw(o, c, { ...opts, x: OFF_X, y: OFF_Y, noShadow: true });
+      o.globalCompositeOperation = 'source-atop';
+      o.fillStyle = `rgba(255,255,255,${Math.min(1, flash)})`;
+      o.fillRect(0, 0, off.width, off.height);
+      o.globalCompositeOperation = 'source-over';
+      ctx.drawImage(off, opts.x - OFF_X, opts.y - OFF_Y);
+      return;
+    }
+  }
+  drawHamsterRaw(ctx, c, opts);
+}
+
+const OFF_W = 640;
+const OFF_H = 560;
+const OFF_X = 320;
+const OFF_Y = 440;
+let offCanvas: HTMLCanvasElement | null | undefined;
+function offscreen() {
+  if (offCanvas === undefined) {
+    offCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+    if (offCanvas) {
+      offCanvas.width = OFF_W;
+      offCanvas.height = OFF_H;
+    }
+  }
+  return offCanvas;
+}
+
+function shadow(ctx: Ctx, o: HamsterOpts) {
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ellipse(ctx, o.x, FLOOR + 3, 46 * o.size * Math.max(0.45, 1 - (FLOOR - o.y) / 320), 8 * Math.min(1.4, o.size));
+  ctx.fill();
+}
+
+function drawHamsterRaw(ctx: Ctx, c: CharDef, opts: HamsterOpts) {
+  const { x, y, facing, size, beast, pose: P, time } = opts;
+  const grow = beast ? (opts.grow ?? 1) : 0;
+  const fur = c.fur;
+  const line = fur.line;
+  const seed = opts.seed ?? 0;
+  ctx.save();
+  if (!opts.noShadow) shadow(ctx, opts);
+
+  ctx.translate(x, y - P.lift * size);
   ctx.scale(facing * size, size);
-  if (opts.ko !== undefined) ctx.rotate(-Math.min(1, opts.ko * 2.5) * (Math.PI / 2));
-  ctx.rotate(L.lean);
-  if (L.spin) {
+  if (opts.ko !== undefined) {
+    ctx.translate(0, -20);
+    ctx.rotate(-Math.min(1, opts.ko * 2.5) * (Math.PI / 2));
+    ctx.translate(0, 20);
+  }
+  if (P.shake) ctx.translate(Math.sin(time * 71 + seed) * P.shake, Math.cos(time * 53) * P.shake * 0.4);
+  if (P.spin) {
     ctx.translate(0, -55);
-    ctx.scale(Math.cos(L.spin), 1);
+    ctx.scale(Math.cos(P.spin), 1);
     ctx.translate(0, 55);
   }
-  ctx.scale(1, L.squash);
 
-  if (L.glow) {
+  // 빛 (기술 준비·초필살)
+  if (P.glow) {
     const g = ctx.createRadialGradient(0, -60, 10, 0, -60, 110);
-    g.addColorStop(0, L.glow + 'aa');
-    g.addColorStop(1, L.glow + '00');
+    g.addColorStop(0, P.glow + '99');
+    g.addColorStop(1, P.glow + '00');
     ctx.fillStyle = g;
     ellipse(ctx, 0, -60, 110, 110);
     ctx.fill();
   }
-  if (beast) {
-    // 변신 중 기운 (부드럽게 일렁임)
-    const r = 78 + Math.sin(time * 9) * 5;
-    const ag = ctx.createRadialGradient(0, -62, 30, 0, -62, r);
-    ag.addColorStop(0, c.accent + '00');
-    ag.addColorStop(0.7, c.accent + '33');
-    ag.addColorStop(1, c.accent + '00');
-    ctx.fillStyle = ag;
-    ellipse(ctx, 0, -62, r, r * 1.05);
+  if (beast) beastAura(ctx, c, time, grow);
+
+  // ----- 뼈대 위치 -----
+  const sq = P.sq;
+  const neckUp = c.dino === 'brachio' ? 34 * Math.min(1, grow) : 0;
+  const bodyCY = -6 - 42 * sq;
+  const bodyRX = 40 * (1 + (1 - sq) * 0.55);
+  const bodyRY = 40 * sq;
+  const tilt = P.tilt;
+  const cos = Math.cos(tilt);
+  const sin = Math.sin(tilt);
+  // 몸통 좌표 → 바깥 좌표 (엉덩이 근처를 축으로 기울임)
+  const tf = (px: number, py: number): [number, number] => {
+    const rx = px;
+    const ry = py + 14;
+    return [P.bx + rx * cos - ry * sin, -14 + rx * sin + ry * cos];
+  };
+  const head = tf(8 + P.hx, bodyCY - 44 * (0.55 + 0.45 * sq) + P.hy - neckUp);
+  const headRot = tilt * 0.55 + P.ht;
+  const fShoulder = tf(16, bodyCY - 12 * sq);
+  const bShoulder = tf(-6, bodyCY - 16 * sq);
+  const fHip = tf(12, bodyCY + 24 * sq);
+  const bHip = tf(-12, bodyCY + 24 * sq);
+
+  const backFur = shade(fur.back, -28);
+  // ----- 뒤쪽 다리·팔 -----
+  const bl = limb(bHip[0], bHip[1], P.bfx, P.bfy - 3, 17, 17, -1, 1.9);
+  tube(ctx, [bHip, [bl.ex, bl.ey], [bl.hx, bl.hy]], 13, backFur, line);
+  footShape(ctx, bl.hx, bl.hy, P.bfy < -6 ? Math.atan2(bl.hy - bl.ey, bl.hx - bl.ex) - Math.PI / 2 : 0, line, true, false);
+  const ba = limb(bShoulder[0], bShoulder[1], P.bhx, P.bhy, 19, 19, 1, 1.5);
+  tube(ctx, [bShoulder, [ba.ex, ba.ey], [ba.hx, ba.hy]], 12, backFur, line);
+  paw(ctx, ba.hx, ba.hy, Math.atan2(ba.hy - ba.ey, ba.hx - ba.ex), P.fist, line, false);
+
+  // ----- 몸통 (기울인 좌표에서) -----
+  ctx.save();
+  ctx.translate(P.bx, -14);
+  ctx.rotate(tilt);
+  ctx.translate(0, 14);
+  if (beast) grown(ctx, grow, -24, bodyCY, () => {
+      ctx.translate(0, bodyCY + 46);
+      backFeatures(ctx, c.dino, c, time);
+    });
+  // 작은 꼬리
+  if (!beast || grow < 0.5) {
+    ctx.fillStyle = shade(fur.back, -10);
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 2.5;
+    ellipse(ctx, -bodyRX + 2, bodyCY + 18 * sq, 7, 5.5, Math.sin(time * 6) * 0.3);
     ctx.fill();
+    ctx.stroke();
   }
-
-  const line = fur.line;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-
-  if (beast) backFeatures(ctx, c.dino, c, time);
-  // 꼬리 혹은 작은 엉덩이 털
-  if (!beast) {
-    ctx.fillStyle = fur.back;
-    ellipse(ctx, -40, -28, 7, 6);
-    ctx.fill();
-  }
-  const headX = 6;
-  const headY = -88 - neckUp;
-  if (beast && c.dino === 'tricera') frill(ctx, c, headX, headY);
-  // 프테라 날개(앞쪽은 팔에)
-  // 뒷발
-  const footFill = '#ffb4b4';
-  ctx.fillStyle = footFill;
-  ctx.strokeStyle = line;
-  ctx.lineWidth = 2.5;
-  ellipse(ctx, L.foot2[0], L.foot2[1], 12, 6);
-  ctx.fill();
-  ctx.stroke();
-  // 뒷귀
-  ctx.fillStyle = fur.back;
-  ctx.lineWidth = 3;
-  ellipse(ctx, headX - 18, headY - 26, 11, 11);
-  ctx.fill();
-  ctx.stroke();
-
-  // 몸과 머리: 외곽선을 먼저 두껍게, 그 위에 채우기 → 하나로 이어진 몸
   ctx.strokeStyle = line;
   ctx.lineWidth = 6;
-  ellipse(ctx, 0, -46, 42, 40);
+  ellipse(ctx, 0, bodyCY, bodyRX, bodyRY);
   ctx.stroke();
   if (neckUp) {
     ctx.lineWidth = 34;
     ctx.beginPath();
-    ctx.moveTo(4, -70);
-    ctx.lineTo(headX, headY + 10);
+    ctx.moveTo(4, bodyCY - 22);
+    ctx.lineTo(8, bodyCY - 44 - neckUp + 10);
     ctx.stroke();
   }
-  ctx.lineWidth = 6;
-  ellipse(ctx, headX, headY, 34, 31);
-  ctx.stroke();
-  ctx.fillStyle = opts.flash ? '#ffffff' : furFill(ctx, 0, -46, 42, fur.back);
-  ellipse(ctx, 0, -46, 42, 40);
+  ctx.fillStyle = furFill(ctx, 0, bodyCY, Math.max(bodyRX, bodyRY), fur.back);
+  ellipse(ctx, 0, bodyCY, bodyRX, bodyRY);
   ctx.fill();
   if (neckUp) {
-    ctx.strokeStyle = opts.flash ? '#fff' : fur.back;
+    ctx.strokeStyle = fur.back;
     ctx.lineWidth = 28;
     ctx.beginPath();
-    ctx.moveTo(4, -70);
-    ctx.lineTo(headX, headY + 10);
+    ctx.moveTo(4, bodyCY - 22);
+    ctx.lineTo(8, bodyCY - 44 - neckUp + 10);
     ctx.stroke();
   }
-  ctx.fillStyle = opts.flash ? '#ffffff' : furFill(ctx, headX, headY, 34, fur.back);
-  ellipse(ctx, headX, headY, 34, 31);
+  // 배 털 (흰 털이 아래로 넓게)
+  const bg = ctx.createRadialGradient(14, bodyCY + 4, 4, 12, bodyCY + 8, bodyRY);
+  bg.addColorStop(0, '#ffffff');
+  bg.addColorStop(1, fur.belly);
+  ctx.fillStyle = bg;
+  ellipse(ctx, 13, bodyCY + 6 * sq, bodyRX * 0.66, bodyRY * 0.76);
   ctx.fill();
-
-  if (!opts.flash) {
-    // 배 털
-    const bg = ctx.createRadialGradient(10, -46, 4, 10, -40, 34);
-    bg.addColorStop(0, '#ffffff');
-    bg.addColorStop(1, fur.belly);
-    ctx.fillStyle = bg;
-    ellipse(ctx, 12, -40, 26, 28);
-    ctx.fill();
-    // 얼굴 아래 흰 털
-    ctx.fillStyle = fur.belly;
-    ellipse(ctx, headX + 16, headY + 10, 22, 15);
-    ctx.fill();
-    // 변신하면 비늘 무늬
-    if (beast) {
-      ctx.fillStyle = fur.scale;
-      ctx.globalAlpha = 0.75;
-      for (const [sx, sy, r] of [[-24, -62, 7], [-30, -44, 6], [-14, -76, 6], [-8, -112 - neckUp, 6], [-22, -100 - neckUp, 5], [-20, -28, 5]]) {
-        ctx.beginPath();
-        ctx.arc(sx, sy, r, Math.PI, 0);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      if (c.dino === 'meteor') {
-        ctx.strokeStyle = '#ff6d2e';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-20, -70);
-        ctx.lineTo(-8, -54);
-        ctx.lineTo(-18, -40);
-        ctx.moveTo(-6, -104);
-        ctx.lineTo(4, -96);
-        ctx.stroke();
-      }
-    }
-    if (beast) overBody(ctx, c.dino, c);
-    // 머리 하이라이트 (입체감)
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ellipse(ctx, headX - 12, headY - 16, 12, 7, -0.5);
-    ctx.fill();
+  // 털 결 (몸 옆 짧은 선)
+  ctx.strokeStyle = shade(fur.back, -40);
+  ctx.globalAlpha = 0.45;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (const [sx, sy] of [[-26, -8], [-30, 8], [-22, 20]]) {
+    ctx.moveTo(sx, bodyCY + sy * sq);
+    ctx.lineTo(sx - 5, bodyCY + sy * sq + 3);
   }
-  // 앞귀
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  if (beast && grow > 0.05) {
+    // 공룡 비늘 무늬
+    ctx.fillStyle = fur.scale;
+    ctx.globalAlpha = 0.75 * Math.min(1, grow);
+    for (const [sx, sy, r] of [[-24, -14, 7], [-30, 4, 6], [-14, -28, 6], [-20, 20, 5]]) {
+      ctx.beginPath();
+      ctx.arc(sx, bodyCY + sy * sq, r, Math.PI, 0);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (c.dino === 'meteor') {
+      ctx.strokeStyle = '#ff6d2e';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-20, bodyCY - 22);
+      ctx.lineTo(-8, bodyCY - 6);
+      ctx.lineTo(-18, bodyCY + 8);
+      ctx.stroke();
+    }
+    grown(ctx, grow, -10, bodyCY, () => {
+      ctx.translate(0, bodyCY + 46);
+      overBody(ctx, c.dino, c);
+    });
+  }
+  ctx.restore();
+
+  // ----- 앞다리 -----
+  const fl = limb(fHip[0], fHip[1], P.ffx, P.ffy - 3, 17, 17, -1, 1.9);
+  tube(ctx, [fHip, [fl.ex, fl.ey], [fl.hx, fl.hy]], 14, fur.back, line);
+  footShape(ctx, fl.hx, fl.hy, P.ffy < -6 ? Math.atan2(fl.hy - fl.ey, fl.hx - fl.ex) - Math.PI / 2 : 0, line, false, beast && grow > 0.5 && c.dino === 'raptor');
+
+  // ----- 머리 -----
+  ctx.save();
+  ctx.translate(head[0], head[1]);
+  ctx.rotate(headRot);
+  const hx = 0;
+  const hy = 0;
+  // 귀 (움직임에 따라 젖혀짐)
+  const ear = (ex: number, ey: number, back: boolean) => {
+    ctx.save();
+    ctx.translate(ex, ey);
+    ctx.rotate(-0.5 * P.ear + (back ? -0.2 : 0.15));
+    ctx.fillStyle = back ? backFur : fur.back;
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 3;
+    ellipse(ctx, 0, -6, 11, 12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffa8b8';
+    ellipse(ctx, 1, -6, 6, 7);
+    ctx.fill();
+    ctx.restore();
+  };
+  ear(-16, -22, true);
+  if (beast && c.dino === 'tricera') grown(ctx, grow, hx - 10, hy, () => frill(ctx, c, hx, hy));
   ctx.strokeStyle = line;
-  ctx.lineWidth = 3;
-  ctx.fillStyle = fur.back;
-  ellipse(ctx, headX + 18, headY - 28, 11, 11);
+  ctx.lineWidth = 6;
+  ellipse(ctx, 0, 0, 34, 31);
+  ctx.stroke();
+  // 볼 주머니 (햄스터답게 볼록)
+  ctx.lineWidth = 5;
+  ellipse(ctx, 20, 12, 18, 14);
+  ctx.stroke();
+  ctx.fillStyle = furFill(ctx, 0, 0, 34, fur.back);
+  ellipse(ctx, 0, 0, 34, 31);
+  ctx.fill();
+  const cheek = ctx.createRadialGradient(22, 8, 2, 20, 12, 18);
+  cheek.addColorStop(0, '#ffffff');
+  cheek.addColorStop(1, fur.belly);
+  ctx.fillStyle = cheek;
+  ellipse(ctx, 20, 12, 18, 14);
+  ctx.fill();
+  // 이마 줄무늬
+  ctx.fillStyle = shade(fur.back, -22);
+  ctx.globalAlpha = 0.5;
+  ellipse(ctx, -2, -20, 6, 10, 0.3);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  // 머리 윤기
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ellipse(ctx, -12, -16, 12, 7, -0.5);
+  ctx.fill();
+  ear(16, -26, false);
+  if (beast) grown(ctx, grow, hx + 6, hy - 10, () => headFeatures(ctx, c.dino, c, hx, hy, time));
+  // 볼터치
+  ctx.fillStyle = 'rgba(255,120,150,0.45)';
+  ellipse(ctx, 24, 12, 7, 4.5);
+  ctx.fill();
+  ellipse(ctx, -4, 10, 5, 3.5);
+  ctx.fill();
+  const eyes: Eyes = (P.eyes === 'normal' || P.eyes === 'angry' || P.eyes === 'focus') && blinking(time, seed + c.hp) ? 'closed' : P.eyes;
+  eyesOf(ctx, eyes, hx, hy, beast && grow > 0.6 ? c.accent : undefined);
+  // 코
+  ctx.fillStyle = '#ff8aa0';
+  ctx.strokeStyle = '#c4536a';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(29, 3);
+  ctx.lineTo(36, 3);
+  ctx.lineTo(32.5, 8);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#ffa8b8';
-  ellipse(ctx, headX + 18, headY - 28, 6, 6);
-  ctx.fill();
-  ellipse(ctx, headX - 18, headY - 26, 5, 5);
-  ctx.fill();
-
-  if (beast) headFeatures(ctx, c.dino, c, headX, headY, time);
-  // 볼 터치
-  ctx.fillStyle = 'rgba(255,120,150,0.45)';
-  ellipse(ctx, headX + 22, headY + 10, 7, 4.5);
-  ctx.fill();
-  ellipse(ctx, headX - 4, headY + 10, 5, 3.5);
-  ctx.fill();
-  eyesOf(ctx, L.eyes, headX, headY);
-  // 코와 입
-  ctx.fillStyle = '#ff8aa0';
-  ellipse(ctx, headX + 32, headY + 6, 4, 3);
-  ctx.fill();
-  if (!(beast && c.dino === 'trex')) {
-    ctx.strokeStyle = '#5a2a20';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(headX + 27, headY + 11, 3, 0, Math.PI);
-    ctx.arc(headX + 33, headY + 11, 3, 0, Math.PI);
-    ctx.stroke();
+  mouthOf(ctx, P.mouth, hx, hy, beast && grow > 0.5, c.dino);
+  // 수염 (조금씩 떨림)
+  ctx.strokeStyle = 'rgba(60,40,30,0.55)';
+  ctx.lineWidth = 1.2;
+  const wv = Math.sin(time * 9 + seed) * 1.5;
+  ctx.beginPath();
+  for (const [dy, len] of [[-2, 20], [3, 22], [8, 18]]) {
+    ctx.moveTo(34, 6 + dy * 0.3);
+    ctx.quadraticCurveTo(44, 4 + dy + wv * 0.5, 34 + len, 2 + dy * 1.6 + wv);
   }
-  accessory(ctx, c, headX, headY, time);
+  ctx.stroke();
+  accessory(ctx, c, hx, hy, time);
+  ctx.restore();
 
-  // 앞발 (팔을 뻗으면 털 색 팔을 그린다)
-  ctx.strokeStyle = line;
-  ctx.lineWidth = 3;
-  const arm = (px: number, py: number, back: boolean) => {
-    if (L.reachArm && !back) {
-      ctx.strokeStyle = line;
-      ctx.lineWidth = 17;
-      ctx.beginPath();
-      ctx.moveTo(14, -60);
-      ctx.lineTo(px, py);
-      ctx.stroke();
-      ctx.strokeStyle = fur.back;
-      ctx.lineWidth = 12;
-      ctx.stroke();
-    }
-    // 프테라는 앞발에 날개막
-    if (beast && c.dino === 'ptera' && !back) {
+  // ----- 앞팔 (몸 앞) -----
+  const fa = limb(fShoulder[0], fShoulder[1], P.fhx, P.fhy, 19, 19, 1, 1.6);
+  if (beast && grow > 0.05 && c.dino === 'ptera') {
+    // 앞발에 날개막
+    grown(ctx, grow, fShoulder[0], fShoulder[1], () => {
       ctx.fillStyle = shade(c.fur.feature, 30);
       ctx.strokeStyle = line;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(10, -66);
-      ctx.lineTo(px + 6, py - 4);
-      ctx.lineTo(px - 18, py + 34);
-      ctx.lineTo(-10, -30);
+      ctx.moveTo(fShoulder[0], fShoulder[1]);
+      ctx.lineTo(fa.ex, fa.ey);
+      ctx.lineTo(fa.hx + 6, fa.hy - 4);
+      ctx.quadraticCurveTo(fa.hx - 20, fa.hy + 40, fShoulder[0] - 22, fShoulder[1] + 40);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-    }
-    ctx.fillStyle = '#ffc4c4';
-    ctx.strokeStyle = line;
-    ctx.lineWidth = 3;
-    ellipse(ctx, px, py, 9, 8);
-    ctx.fill();
-    ctx.stroke();
-    if (beast && (c.dino === 'raptor' || c.dino === 'trex' || c.dino === 'meteor')) {
-      ctx.fillStyle = '#fff6dc';
-      for (const d of [-4, 2]) {
-        ctx.beginPath();
-        ctx.moveTo(px + 6, py + d);
-        ctx.lineTo(px + 15, py + d + 3);
-        ctx.lineTo(px + 6, py + d + 4);
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
-  };
-  arm(L.paw2[0], L.paw2[1], true);
-  // 앞발 발
-  ctx.fillStyle = footFill;
-  ctx.strokeStyle = line;
-  ctx.lineWidth = 2.5;
-  ellipse(ctx, L.foot[0], L.foot[1], 13, 6.5);
+    });
+  }
+  tube(ctx, [fShoulder, [fa.ex, fa.ey], [fa.hx, fa.hy]], 13, fur.back, line);
+  paw(ctx, fa.hx, fa.hy, Math.atan2(fa.hy - fa.ey, fa.hx - fa.ex), P.fist, line, beast && grow > 0.5 && (c.dino === 'raptor' || c.dino === 'trex' || c.dino === 'meteor'));
+  ctx.restore();
+}
+
+/** 변신 중 기운: 몸 주위로 피어오르는 불꽃 조각 */
+function beastAura(ctx: Ctx, c: CharDef, time: number, grow: number) {
+  const k = Math.min(1, grow);
+  const r = 80 + Math.sin(time * 9) * 5;
+  const ag = ctx.createRadialGradient(0, -62, 30, 0, -62, r);
+  ag.addColorStop(0, c.accent + '00');
+  ag.addColorStop(0.7, c.accent + '30');
+  ag.addColorStop(1, c.accent + '00');
+  ctx.fillStyle = ag;
+  ctx.globalAlpha = k;
+  ellipse(ctx, 0, -62, r, r * 1.05);
   ctx.fill();
-  ctx.stroke();
-  if (beast && c.dino === 'raptor') {
-    ctx.fillStyle = '#fff6dc';
-    ctx.beginPath();
-    ctx.moveTo(L.foot[0] + 4, L.foot[1] - 4);
-    ctx.quadraticCurveTo(L.foot[0] + 16, L.foot[1] - 16, L.foot[0] + 18, L.foot[1] - 2);
-    ctx.closePath();
+  ctx.fillStyle = c.accent;
+  for (let i = 0; i < 7; i++) {
+    const u = (time * 0.9 + i / 7) % 1;
+    const px = Math.sin(i * 2.3 + time * 2) * 40;
+    ctx.globalAlpha = k * (1 - u) * 0.7;
+    ellipse(ctx, px, -10 - u * 130, 4 * (1 - u) + 1.5, 7 * (1 - u) + 2);
     ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** 기 모으기 연출: 발밑에서 솟는 불꽃과 빨려 드는 빛 알갱이 */
+function chargeAura(ctx: Ctx, x: number, y: number, size: number, color: string, time: number, level: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(size, size);
+  // 바닥 빛 고리
+  ctx.strokeStyle = color + 'aa';
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 2; i++) {
+    const u = (time * 1.6 + i * 0.5) % 1;
+    ctx.globalAlpha = 1 - u;
+    ellipse(ctx, 0, 0, 30 + u * 50, 6 + u * 9);
     ctx.stroke();
   }
-  arm(L.paw[0], L.paw[1], false);
+  // 불꽃 기둥
+  for (let i = 0; i < 9; i++) {
+    const u = (time * 2.2 + i / 9) % 1;
+    const px = Math.sin(i * 1.9) * 42 * (1 - u * 0.5);
+    const g = ctx.createRadialGradient(px, -u * 140, 1, px, -u * 140, 16);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.4, color);
+    g.addColorStop(1, color + '00');
+    ctx.fillStyle = g;
+    ctx.globalAlpha = (1 - u) * (0.5 + level * 0.5);
+    ellipse(ctx, px, -u * 140, 12 * (1 - u) + 4, 20 * (1 - u) + 6);
+    ctx.fill();
+  }
+  // 빨려 드는 알갱이
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 10; i++) {
+    const u = (time * 1.3 + i / 10) % 1;
+    const a = i * 2.4 + time;
+    const rr = (1 - u) * 110;
+    ctx.globalAlpha = u;
+    ellipse(ctx, Math.cos(a) * rr, -60 + Math.sin(a) * rr * 0.8, 2.5, 2.5);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** 변신 연출 (몸 뒤): 모이는 빛 → 기둥 → 터짐 */
+function transformBack(ctx: Ctx, f: Fighter, size: number, time: number) {
+  const t = f.t;
+  const col = f.char.accent;
+  ctx.save();
+  ctx.translate(f.x, f.y);
+  ctx.scale(size, size);
+  if (t < TRANSFORM_BURST) {
+    const k = t / TRANSFORM_BURST;
+    // 빛 기둥
+    const pg = ctx.createLinearGradient(-50, 0, 50, 0);
+    pg.addColorStop(0, col + '00');
+    pg.addColorStop(0.5, col + 'cc');
+    pg.addColorStop(1, col + '00');
+    ctx.fillStyle = pg;
+    ctx.globalAlpha = k;
+    ctx.fillRect(-50 * (0.4 + k), -400, 100 * (0.4 + k), 410);
+    // 소용돌이치며 모이는 빛
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 16; i++) {
+      const u = (k * 1.5 + i / 16) % 1;
+      const a = i * 0.9 + time * 6;
+      const rr = (1 - u) * 150;
+      ctx.globalAlpha = u;
+      ellipse(ctx, Math.cos(a) * rr, -60 + Math.sin(a) * rr, 3, 3);
+      ctx.fill();
+    }
+  } else {
+    const k = (t - TRANSFORM_BURST) / (1 - TRANSFORM_BURST);
+    // 퍼지는 충격 고리 두 겹
+    for (const [d, w] of [[0, 10], [0.15, 5]]) {
+      const u = Math.max(0, k - d);
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = Math.max(0, 1 - u * 1.4);
+      ctx.lineWidth = w * (1 - u);
+      ellipse(ctx, 0, -60, 30 + u * 220, 30 + u * 200);
+      ctx.stroke();
+    }
+    // 바닥 먼지
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    for (const s of [-1, 1]) {
+      ctx.globalAlpha = Math.max(0, 1 - k * 1.5);
+      ellipse(ctx, s * (30 + k * 120), -6, 20 * (1 - k * 0.5), 8);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/** 변신 연출 (몸 앞): 터지며 튀는 비늘 조각 */
+function transformFront(ctx: Ctx, f: Fighter, size: number) {
+  const t = f.t;
+  if (t < TRANSFORM_BURST) return;
+  const k = (t - TRANSFORM_BURST) / (1 - TRANSFORM_BURST);
+  ctx.save();
+  ctx.translate(f.x, f.y - 60 * size);
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2 + 0.3;
+    const d = k * (120 + (i % 3) * 40) * size;
+    ctx.save();
+    ctx.translate(Math.cos(a) * d, Math.sin(a) * d * 0.8 + k * k * 60);
+    ctx.rotate(a + k * 8);
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    ctx.fillStyle = i % 2 ? f.char.fur.scale : f.char.fur.feature;
+    ctx.beginPath();
+    ctx.moveTo(-6, 4);
+    ctx.lineTo(0, -8);
+    ctx.lineTo(6, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
   ctx.restore();
 }
 
@@ -1214,7 +1473,7 @@ function hud(ctx: Ctx, g: DinoFight) {
     ctx.font = 'bold 12px system-ui, sans-serif';
     ctx.textAlign = left ? 'left' : 'right';
     ctx.fillStyle = '#fff';
-    const label = f.beast ? `🦖 ${f.char.dinoName}` : full ? '변신 가능! 펀치+킥' : '변신 게이지';
+    const label = f.beast ? `🦖 ${f.char.dinoName}` : full ? '변신 가능! 기 버튼' : f.action === 'charge' ? '기 모으는 중…' : '기 게이지';
     ctx.fillText(label, left ? gx + gw + 10 : gx - 10, 62);
     // 이름
     ctx.font = '900 18px system-ui, sans-serif';
@@ -1277,13 +1536,23 @@ function hud(ctx: Ctx, g: DinoFight) {
   }
 }
 
-export function fighterLook(g: DinoFight, f: Fighter, time: number) {
-  return lookOf(g, f, time);
+export function fighterPose(g: DinoFight, f: Fighter, time: number) {
+  return livePose(g, f, time);
 }
 
 /** 화면 밖(카드 그림 등)에서 쓰는 기본 자세 */
-export function fighterLookStatic(time: number, eyes: Look['eyes'] = 'normal'): Look {
-  return { lean: 0.04, squash: 1 + Math.sin(time * 5) * 0.025, lift: 0, paw: [30, -60 + Math.sin(time * 5) * 2], paw2: [14, -54], foot: [18, -3], foot2: [-12, -3], eyes, spin: 0, reachArm: false };
+export function idlePose(time: number, eyes: Eyes = 'normal', seed = 0): Pose {
+  const p = basePose(time, seed);
+  p.eyes = eyes;
+  if (eyes === 'angry') p.mouth = 'grit';
+  return p;
+}
+
+/** 변신해서 공룡 특징이 돋아난 정도 */
+function growOf(f: Fighter) {
+  if (f.action !== 'transform') return 1;
+  if (f.t < TRANSFORM_BURST) return 0;
+  return easeOutBack((f.t - TRANSFORM_BURST) / 0.3);
 }
 
 export function renderFight(ctx: Ctx, g: DinoFight, time: number, stage: StageId) {
@@ -1296,17 +1565,35 @@ export function renderFight(ctx: Ctx, g: DinoFight, time: number, stage: StageId
   }
   const order = [...g.fighters].sort((a, b) => Number(DinoFight.isAttack(a.action)) - Number(DinoFight.isAttack(b.action)));
   for (const f of order) {
+    const size = g.size(f);
+    const tr = f.action === 'transform';
+    if (tr) transformBack(ctx, f, size, time);
+    if (f.action === 'charge') chargeAura(ctx, f.x, f.y, size, f.char.accent, time, f.gauge / GAUGE_MAX);
+    // 변신 직전엔 점점 하얗게 빛나다가 터지는 순간 가장 밝다
+    let flash = f.action === 'hit' && f.t < 0.08 ? 0.85 : 0;
+    if (tr) flash = f.t < TRANSFORM_BURST ? Math.pow(f.t / TRANSFORM_BURST, 1.6) * 0.9 : Math.max(0, 1 - (f.t - TRANSFORM_BURST) / 0.18);
+    if (f.action === 'charge') flash = 0.12 + 0.1 * Math.sin(time * 18);
     drawHamster(ctx, f.char, {
       x: f.x,
       y: f.y,
       facing: f.facing,
-      size: g.size(f),
-      beast: f.beast || (f.action === 'transform' && f.t > 0.35),
-      look: lookOf(g, f, time),
+      size,
+      beast: f.beast,
+      grow: growOf(f),
+      pose: livePose(g, f, time),
       time,
-      flash: (f.action === 'hit' && f.t < 0.07) || (f.action === 'transform' && Math.floor(f.t * 20) % 2 === 0 && f.t < 0.35),
+      flash,
+      seed: f.id * 7,
       ko: f.action === 'ko' ? f.t : undefined,
     });
+    if (tr) transformFront(ctx, f, size);
+  }
+  // 변신이 터지는 순간 화면 번쩍
+  for (const f of g.fighters) {
+    if (f.action === 'transform' && f.t >= TRANSFORM_BURST && f.t < TRANSFORM_BURST + 0.15) {
+      ctx.fillStyle = `rgba(255,255,255,${0.55 * (1 - (f.t - TRANSFORM_BURST) / 0.15)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
   }
   for (const p of g.projectiles) drawShot(ctx, p, g, time);
   for (const s of g.sparks) {
@@ -1349,7 +1636,7 @@ export function drawPortrait(ctx: Ctx, c: CharDef, beast: boolean, time: number,
   ctx.translate(100, 186);
   ctx.translate(-100, -FLOOR);
   if (locked) ctx.filter = 'brightness(0) opacity(0.85)';
-  const look: Look = { lean: 0, squash: 1 + Math.sin(time * 4) * 0.02, lift: 0, paw: [28, -60], paw2: [12, -52], foot: [18, -3], foot2: [-12, -3], eyes: beast ? 'angry' : 'normal', spin: 0, reachArm: false };
-  drawHamster(ctx, c, { x: 100, y: FLOOR, facing: 1, size: beast && c.dino === 'brachio' ? 0.95 : 1.05, beast, look, time });
+  const pose = idlePose(time, beast ? 'angry' : 'normal', c.hp);
+  drawHamster(ctx, c, { x: 100, y: FLOOR, facing: 1, size: beast && c.dino === 'brachio' ? 0.95 : 1.05, beast, pose, time, seed: c.hp });
   ctx.restore();
 }

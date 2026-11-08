@@ -30,7 +30,10 @@ export type Sfx =
   | 'clear'
   | 'start'
   | 'extra'
-  | 'click';
+  | 'click'
+  | 'charge'
+  | 'full'
+  | 'burst';
 
 class Track {
   readonly id: SongId;
@@ -308,6 +311,13 @@ export class Sound {
         return this.blips([[67, 0.1], [72, 0.1], [76, 0.1], [79, 0.2]], 0.11, 0.1);
       case 'click':
         return this.blips([[90, 0.03]], 0, 0.05, 0.25);
+      case 'charge':
+        return this.sweep(160, 520, 0.4, 0.07, 'triangle');
+      case 'full':
+        return this.blips([[84, 0.05], [91, 0.05], [96, 0.05], [103, 0.12]], 0.05, 0.08);
+      case 'burst':
+        this.thud(1, 0.3, 700);
+        return this.sweep(900, 60, 0.45, 0.3);
     }
   }
 }

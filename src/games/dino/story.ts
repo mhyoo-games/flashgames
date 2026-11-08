@@ -30,7 +30,7 @@ export function newStory(hero: string, seed = Date.now()): StoryState {
     [others[i], others[j]] = [others[j], others[i]];
   }
   const rivals = [...others, BOSS];
-  const stages = rivals.map((rival, i) => ({ no: i + 1, rival, stage: rival.stage, level: rival === BOSS ? ('normal' as Level) : LADDER[i], final: rival === BOSS }));
+  const stages = rivals.map((rival, i) => ({ no: i + 1, rival, stage: rival.stage, level: rival === BOSS ? ('boss' as Level) : LADDER[i], final: rival === BOSS }));
   return { hero, stages, index: 0, continues: 0, cleared: false };
 }
 
