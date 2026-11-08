@@ -410,3 +410,143 @@ h2 {
     padding: 8px;
   }
 }
+
+/* ---- 막대 결투: 캐릭터 선택·스테이지 ---- */
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.menu-card.center {
+  align-items: center;
+  text-align: center;
+}
+.mode.story {
+  border-color: #f472b6;
+}
+.char-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+.char-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 12px 10px 14px;
+  border-radius: 18px;
+  border-color: var(--band);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--band) 22%, var(--card)), var(--card) 55%);
+}
+.char-card small {
+  line-height: 1.5;
+}
+.char-card.locked {
+  border-style: dashed;
+  border-color: var(--line);
+  background: var(--card);
+  opacity: 1;
+}
+.char-card.hidden-char:not(.locked) {
+  box-shadow: 0 0 0 2px #a855f7, 0 0 24px rgba(168, 85, 247, 0.5), 0 4px 0 #1a0f2b;
+}
+.portrait {
+  display: block;
+}
+.bars {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  font-size: 12px;
+}
+.bars > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.pips {
+  display: flex;
+  gap: 3px;
+}
+.pips i {
+  width: 14px;
+  height: 7px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.pips i.on {
+  background: var(--band);
+}
+.clear-badge {
+  color: var(--yellow);
+}
+.intro-wrap {
+  cursor: pointer;
+}
+.stage.dim {
+  filter: brightness(0.45) saturate(0.8);
+}
+.stage-intro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  padding: 10px;
+}
+.stage-no {
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--yellow);
+  text-shadow: 0 3px 0 #000;
+}
+.stage-place {
+  color: #fff;
+  opacity: 0.85;
+}
+.boss-name {
+  font-size: 24px;
+  text-shadow: 0 2px 0 #000;
+}
+.boss-line {
+  margin: 0;
+  font-size: 17px;
+  font-style: italic;
+  text-shadow: 0 2px 0 #000;
+}
+.unlock {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(168, 85, 247, 0.2);
+  border: 2px solid #a855f7;
+  border-radius: 16px;
+  padding: 8px 16px;
+  text-align: left;
+}
+.unlock p {
+  margin: 4px 0 0;
+}
+@media (max-width: 560px) {
+  .char-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .stage-no {
+    font-size: 26px;
+  }
+  .stage-intro .portrait {
+    width: 90px !important;
+    height: 90px !important;
+  }
+  .boss-line {
+    font-size: 13px;
+  }
+}

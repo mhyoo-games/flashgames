@@ -1,13 +1,14 @@
 // 컴퓨터 상대: 거리와 상대 동작을 보고 버튼을 누른다 (난이도별 반응 속도·실수)
 import type { Rng } from '../../core/rng.ts';
-import { ATTACKS, METER_MAX, NO_INPUT, type Input, type StickFight } from './engine.ts';
+import { METER_MAX, NO_INPUT, StickFight, type Input } from './engine.ts';
 
-export type Level = 'easy' | 'normal' | 'hard';
+export type Level = 'easy' | 'normal' | 'hard' | 'master';
 
 export const LEVELS: Record<Level, { name: string; think: number; block: number; aggression: number; combo: number }> = {
   easy: { name: '쉬움', think: 0.42, block: 0.15, aggression: 0.45, combo: 0.2 },
   normal: { name: '보통', think: 0.24, block: 0.45, aggression: 0.65, combo: 0.55 },
   hard: { name: '어려움', think: 0.12, block: 0.75, aggression: 0.8, combo: 0.9 },
+  master: { name: '최강', think: 0.09, block: 0.82, aggression: 0.85, combo: 0.95 },
 };
 
 export class StickAI {
@@ -50,11 +51,16 @@ export class StickAI {
     const dist = Math.abs(dx);
     const toward: Partial<Input> = dx > 0 ? { right: true } : { left: true };
     const away: Partial<Input> = dx > 0 ? { left: true } : { right: true };
-    const opAttacking = op.action in ATTACKS && op.action !== 'special';
+    const opAttacking = StickFight.isAttack(op.action) && op.action !== 'throw';
+    const c = me.char;
+    const range = 95 + c.reach * c.scale;
     const incoming = game.projectiles.find((p) => p.owner !== this.id && Math.sign(me.x - p.x) === Math.sign(p.vx) && Math.abs(me.x - p.x) < 320);
 
     if (incoming) {
-      if (this.rng() < L.block) this.hold.down = true;
+      // 땅을 타고 오는 충격파는 뛰어서 피한다
+      if (incoming.low) {
+        if (Math.abs(me.x - incoming.x) < 200 && this.rng() < L.block + 0.1) this.tap.up = true;
+      } else if (this.rng() < L.block) this.hold.down = true;
       else if (this.rng() < 0.5) this.tap.up = true;
       return { ...this.hold, ...this.tap };
     }
@@ -62,11 +68,23 @@ export class StickAI {
       this.hold.down = true;
       return { ...this.hold };
     }
-    if (me.meter >= METER_MAX && dist > 260 && this.rng() < 0.7) {
-      this.tap.special = true;
+    // 기술: 종류마다 쓰기 좋은 거리가 다르다
+    if (me.meter >= METER_MAX && this.rng() < 0.7) {
+      const sp = me.enraged ? 'wave' : c.special;
+      const good =
+        sp === 'wave' ? dist > 240 : sp === 'dash' ? dist > 120 && dist < 420 : sp === 'slam' ? dist < 380 : sp === 'spin' ? dist < range + 20 : dist > 160;
+      if (good) {
+        this.tap.special = true;
+        return { ...this.hold, ...this.tap };
+      }
+    }
+    // 표창을 쓰는 캐릭터는 거리를 두고 던진다
+    if (c.kick === 'throw' && dist > 180 && dist < 560 && this.rng() < L.aggression * 0.7) {
+      this.tap.kick = true;
+      if (this.rng() < 0.4) Object.assign(this.hold, away);
       return { ...this.hold, ...this.tap };
     }
-    if (dist > 95) {
+    if (dist > range) {
       if (this.rng() < L.aggression) {
         Object.assign(this.hold, toward);
         // 가끔 뛰어들며 발차기

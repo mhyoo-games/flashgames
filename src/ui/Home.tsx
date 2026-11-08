@@ -53,9 +53,9 @@ function Card({ g, onPlay }: { g: GameInfo; onPlay: () => void }) {
     g.id === 'maze'
       ? load<{ score: number }[]>('maze-scores', [])[0]?.score
       : (() => {
-          const r = load<Record<string, { win: number }>>('stick-record', {});
-          const wins = Object.values(r).reduce((a, x) => a + (x?.win ?? 0), 0);
-          return wins || undefined;
+          const r = load<{ clears?: Record<string, number> }>('stick-v2', {});
+          const n = Object.keys(r.clears ?? {}).length;
+          return n || undefined;
         })();
   return (
     <button className="game-card" onClick={onPlay} style={{ ['--c1' as string]: g.colors[0], ['--c2' as string]: g.colors[1] }}>
@@ -68,7 +68,7 @@ function Card({ g, onPlay }: { g: GameInfo; onPlay: () => void }) {
         <p>{g.tagline}</p>
         <small className="muted">
           {g.players}
-          {best !== undefined && (g.id === 'maze' ? ` · 최고 ${best.toLocaleString()}점` : ` · 총 ${best}승`)}
+          {best !== undefined && (g.id === 'maze' ? ` · 최고 ${best.toLocaleString()}점` : ` · 스토리 클리어 ${best}명`)}
         </small>
       </div>
       <span className="play">▶ 플레이</span>

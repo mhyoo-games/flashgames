@@ -3,7 +3,7 @@
 import type { Rng } from './rng.ts';
 
 export type Inst = 'lead' | 'bass' | 'arp' | 'kick' | 'snare' | 'hat';
-export type SongId = 'lobby' | 'fight' | 'maze';
+export type SongId = 'lobby' | 'fight' | 'boss' | 'maze';
 
 export interface NoteEvent {
   beat: number;
@@ -69,6 +69,25 @@ export const SONGS: Record<SongId, Song> = {
     scale: [4, 7, 9, 11, 2],
     range: [64, 83],
   },
+  // 최종 보스: 어둡고 급박한 (D단조, 화성단음계)
+  boss: {
+    id: 'boss',
+    name: '어둠의 성',
+    bpm: 164,
+    swing: 0,
+    chords: [
+      { root: 38, tones: MIN },
+      { root: 38, tones: MIN },
+      { root: 34, tones: MAJ },
+      { root: 33, tones: [0, 4, 7, 10] },
+      { root: 38, tones: MIN },
+      { root: 43, tones: MIN },
+      { root: 34, tones: MAJ },
+      { root: 33, tones: [0, 4, 7, 10] },
+    ],
+    scale: [2, 4, 5, 9, 10, 1],
+    range: [62, 81],
+  },
   // 도토리 미로: 통통 튀는 (C장조, 살짝 셔플)
   maze: {
     id: 'maze',
@@ -100,6 +119,11 @@ const RHYTHMS: Record<SongId, number[][]> = {
     [0, 0.5, 1, 1.5, 2, 3],
     [0, 0.75, 1.5, 2, 2.5, 3, 3.5],
     [0, 1, 1.5, 2.5, 3],
+  ],
+  boss: [
+    [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5],
+    [0, 1, 1.5, 2, 3, 3.5],
+    [0, 0.75, 1.5, 2.25, 3],
   ],
   maze: [
     [0, 0.5, 1, 2, 2.5, 3],
@@ -146,7 +170,7 @@ export function composeBar(c: Composer, rng: Rng): NoteEvent[] {
   const pos = c.bar % 8;
 
   // 북: 곡마다 다른 박자
-  if (song.id === 'fight') {
+  if (song.id === 'fight' || song.id === 'boss') {
     for (const b of [0, 1.5, 2, 3.5]) ev.push({ beat: b, dur: 0.2, midi: 0, inst: 'kick', vel: 0.9 });
     for (const b of [1, 3]) ev.push({ beat: b, dur: 0.2, midi: 0, inst: 'snare', vel: 0.7 });
     for (let b = 0; b < 4; b += 0.5) ev.push({ beat: b, dur: 0.05, midi: 0, inst: 'hat', vel: b % 1 ? 0.35 : 0.5 });
