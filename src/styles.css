@@ -411,7 +411,7 @@ h2 {
   }
 }
 
-/* ---- 막대 결투: 캐릭터 선택·스테이지 ---- */
+/* ---- 격투: 캐릭터 선택·스테이지 ---- */
 .row {
   display: flex;
   gap: 8px;
@@ -548,5 +548,119 @@ h2 {
   }
   .boss-line {
     font-size: 13px;
+  }
+}
+
+/* ---- 햄스터 다이노 파이트 ---- */
+.select-layout {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 16px;
+  width: 100%;
+  align-items: start;
+}
+.char-grid.dino {
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+}
+.char-grid.dino .char-card {
+  padding: 8px 6px 10px;
+  gap: 2px;
+}
+.char-card.focus {
+  outline: 3px solid var(--band);
+  outline-offset: 2px;
+}
+.char-detail {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--band) 25%, var(--card)), var(--card));
+  border: 2px solid var(--band);
+  border-radius: 18px;
+  padding: 14px;
+  position: sticky;
+  top: 10px;
+}
+.char-detail h3 {
+  margin: 0 0 4px;
+}
+.char-detail p {
+  margin: 4px 0;
+}
+.detail-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.detail-head > div {
+  flex: 1;
+}
+.movelist {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 6px;
+}
+.movelist td {
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.movelist code {
+  font-family: inherit;
+  color: var(--yellow);
+}
+.movelist tr.super td:first-child {
+  color: #ff8fb3;
+  font-weight: 800;
+}
+.pause-menu .movelist {
+  width: min(460px, 90%);
+  background: rgba(20, 10, 35, 0.7);
+  border-radius: 12px;
+}
+.stage-intro.vs .vs-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.vs-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 20px;
+  text-shadow: 0 2px 0 #000;
+}
+.vs-side.flip .portrait {
+  transform: scaleX(-1);
+}
+.vs-mark {
+  font-size: 54px;
+  font-weight: 900;
+  color: #ff4d8d;
+  text-shadow: 0 4px 0 #000;
+  font-style: italic;
+}
+.pad-right.wide {
+  flex-wrap: wrap;
+  max-width: 200px;
+  justify-content: flex-end;
+}
+.touchpad .mini {
+  font-size: 12px;
+  border-radius: 14px;
+}
+@media (max-width: 900px) {
+  .select-layout {
+    grid-template-columns: 1fr;
+  }
+  .char-detail {
+    position: static;
+  }
+}
+@media (max-width: 560px) {
+  .vs-mark {
+    font-size: 30px;
+  }
+  .stage-intro.vs .portrait {
+    width: 80px !important;
+    height: 80px !important;
   }
 }

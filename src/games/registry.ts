@@ -16,14 +16,14 @@ export interface GameInfo {
 
 export const GAMES: GameInfo[] = [
   {
-    id: 'stick',
-    title: '막대 결투',
-    tagline: '무기가 다른 졸라맨 넷 중 하나를 골라 스테이지마다 기다리는 보스 다섯을 쓰러뜨려라. 숨겨진 캐릭터도 있다!',
+    id: 'dino',
+    title: '햄스터 다이노 파이트',
+    tagline: '햄스터 8마리의 공룡 변신 격투! 커맨드 기술로 싸우다 게이지가 차면 티라노·트리케라톱스·스테고사우루스로 변신!',
     genre: '격투',
     players: '1인 스토리 · 컴퓨터 대전 · 2인 대전',
     song: 'fight',
-    colors: ['#ff9a5a', '#ffd27a'],
-    controls: ['1P: A·D 이동, W 점프, S 막기, J 공격, K 발차기, L 필살기', '2P: ←·→ 이동, ↑ 점프, ↓ 막기, 1 공격, 2 발차기, 3 필살기 (숫자패드도 가능)'],
+    colors: ['#ff9a5a', '#7fd8be'],
+    controls: ['1P: WASD 이동, J 펀치, K 킥, L 변신', '2P: 방향키 이동, 1 펀치, 2 킥, 3 변신', '↓↘→+펀치 등 커맨드 기술'],
   },
   {
     id: 'maze',

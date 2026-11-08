@@ -50,10 +50,10 @@ export const SONGS: Record<SongId, Song> = {
     scale: [5, 7, 9, 0, 2],
     range: [69, 84],
   },
-  // 막대 결투: 빠르고 긴장감 있는 (E단조)
+  // 격투: 빠르고 긴장감 있는 (E단조)
   fight: {
     id: 'fight',
-    name: '옥상 위의 결투',
+    name: '공룡 대격돌',
     bpm: 152,
     swing: 0,
     chords: [

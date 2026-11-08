@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { sound } from './core/audio';
 import { GAMES } from './games/registry';
 import { MazeGame } from './games/maze/MazeGame';
-import { StickGame } from './games/stick/StickGame';
+import { DinoGame } from './games/dino/DinoGame';
 import { Home } from './ui/Home';
 
 function route(): string {
@@ -37,7 +37,7 @@ export default function App() {
   };
   const home = () => go('');
 
-  if (page === 'stick') return <StickGame onBack={home} />;
+  if (page === 'dino') return <DinoGame onBack={home} />;
   if (page === 'maze') return <MazeGame onBack={home} />;
   return <Home onPlay={go} />;
 }

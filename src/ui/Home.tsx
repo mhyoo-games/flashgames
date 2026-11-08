@@ -1,26 +1,34 @@
+import { useEffect, useRef } from 'react';
 import { load } from '../core/storage';
+import { charById } from '../games/dino/chars';
+import { drawHamster, drawStage, fighterLookStatic } from '../games/dino/render';
 import { GAMES, type GameInfo } from '../games/registry';
 import { SoundControls } from './common';
 
+/** 첫 화면 카드: 햄스터 둘이 마주 보는 그림 */
+function DinoArt() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const t0 = performance.now();
+    const draw = (now: number) => {
+      const ctx = ref.current?.getContext('2d');
+      if (!ctx) return;
+      const t = (now - t0) / 1000;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      drawStage(ctx, 'jungle', t);
+      drawHamster(ctx, charById('rex'), { x: 330, y: 465, facing: 1, size: 1.9, beast: Math.floor(t / 2.5) % 2 === 1, look: fighterLookStatic(t, 'angry'), time: t });
+      drawHamster(ctx, charById('triko'), { x: 630, y: 465, facing: -1, size: 1.9, beast: true, look: fighterLookStatic(t + 1, 'angry'), time: t });
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <canvas ref={ref} width={960} height={528} className="art" />;
+}
+
 function Art({ id }: { id: string }) {
-  if (id === 'stick')
-    return (
-      <svg viewBox="0 0 200 110" className="art">
-        <rect width="200" height="110" fill="#ffd9a0" />
-        <rect y="88" width="200" height="22" fill="#8d6e63" />
-        <g stroke="#1b1f3b" strokeWidth="5" strokeLinecap="round" fill="none">
-          <circle cx="62" cy="28" r="9" fill="#1b1f3b" />
-          <path d="M62 37 L58 62 M58 62 L46 86 M58 62 L70 86 M60 44 L82 40 L98 42 M60 44 L48 54 L56 60" />
-        </g>
-        <g stroke="#c0392b" strokeWidth="5" strokeLinecap="round" fill="none">
-          <circle cx="140" cy="32" r="9" fill="#c0392b" />
-          <path d="M140 41 L146 64 M146 64 L130 70 L108 60 M146 64 L154 88 M142 48 L130 52 M142 48 L156 44" />
-        </g>
-        <g stroke="#fff" strokeWidth="3">
-          <path d="M102 36 l8 -6 M104 44 l10 0 M102 50 l8 6" />
-        </g>
-      </svg>
-    );
+  if (id === 'dino') return <DinoArt />;
   return (
     <svg viewBox="0 0 200 110" className="art">
       <rect width="200" height="110" fill="#1a3a27" />
@@ -53,7 +61,7 @@ function Card({ g, onPlay }: { g: GameInfo; onPlay: () => void }) {
     g.id === 'maze'
       ? load<{ score: number }[]>('maze-scores', [])[0]?.score
       : (() => {
-          const r = load<{ clears?: Record<string, number> }>('stick-v2', {});
+          const r = load<{ clears?: Record<string, number> }>('dino-v1', {});
           const n = Object.keys(r.clears ?? {}).length;
           return n || undefined;
         })();
@@ -68,7 +76,7 @@ function Card({ g, onPlay }: { g: GameInfo; onPlay: () => void }) {
         <p>{g.tagline}</p>
         <small className="muted">
           {g.players}
-          {best !== undefined && (g.id === 'maze' ? ` · 최고 ${best.toLocaleString()}점` : ` · 스토리 클리어 ${best}명`)}
+          {best !== undefined && (g.id === 'maze' ? ` · 최고 ${best.toLocaleString()}점` : ` · 스토리 클리어 ${best}마리`)}
         </small>
       </div>
       <span className="play">▶ 플레이</span>
