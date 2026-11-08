@@ -32,6 +32,8 @@ export const LOOKS: Record<string, Look> = {
   kid: { skin: '#ffd2a8', hair: '#c86a2a', hairStyle: 'short', top: '#3aa0e0', pants: '#2a4a8a' },
   kid2: { skin: '#ffe0c4', hair: '#2a2a3a', hairStyle: 'twin', top: '#ff7aa0', pants: '#ff7aa0', robe: true },
   shop: { skin: '#ffd2a8', hair: '#4a3a2a', hairStyle: 'short', top: '#ffffff', trim: '#3a8ad0', pants: '#4a4a6a', hat: 'cap', hatColor: '#3a8ad0', prop: 'abacus' },
+  guard: { skin: '#f0c8a0', hair: '#5a3a2a', hairStyle: 'short', top: '#8a9ab0', trim: '#d0d8e8', pants: '#4a4a5a', hat: 'helm', hatColor: '#b0b8c8', prop: 'spear' },
+  woodcutter: { skin: '#e8b890', hair: '#6a3a1a', hairStyle: 'short', top: '#4a8a3a', trim: '#2a5a2a', pants: '#5a3a22', beard: '#6a3a1a', prop: 'axe' },
   inn: { skin: '#f0c8a0', hair: '#2a2a2a', hairStyle: 'short', top: '#a03a3a', pants: '#3a2a2a', beard: '#2a2a2a' },
   bandit: { skin: '#c8a080', hair: '#6a5a4a', hairStyle: 'none', ears: 'raccoon', eyes: 'mask', top: '#5a4a6a', pants: '#3a3040', hat: 'bandana', hatColor: '#c83a3a', prop: 'club' },
   bear: { skin: '#a8743a', hair: '#7a4a22', hairStyle: 'none', ears: 'bear', top: '#5a3a1a', trim: '#e8c070', pants: '#3a2a1a', belt: '#c8a040', beard: '#6a3a1a', prop: 'club' },
@@ -53,6 +55,37 @@ export const ITEMS: Record<string, ItemDef> = {
   honey: { id: 'honey', name: '꿀단지', desc: 'HP를 80 채운다. 곰이 아끼던 꿀.', price: 40, hp: 80 },
 };
 
+// ---------------- 장비 ----------------
+export type Slot = 'weapon' | 'armor' | 'charm';
+export const SLOT_NAME: Record<Slot, string> = { weapon: '무기', armor: '옷', charm: '장신구' };
+export interface EquipDef {
+  id: string;
+  name: string;
+  slot: Slot;
+  /** 장착할 수 있는 동료 (없으면 누구나) */
+  who?: string[];
+  atk?: number;
+  mag?: number;
+  def?: number;
+  spd?: number;
+  hp?: number;
+  /** 장착하면 쓸 수 있는 기술 */
+  skill?: string;
+  price: number;
+  desc: string;
+}
+export const EQUIPS: Record<string, EquipDef> = {
+  stick: { id: 'stick', name: '나무 목검', slot: 'weapon', who: ['haru'], atk: 4, price: 30, desc: '도장에서 쓰던 목검. 손에 익었다.' },
+  wand: { id: 'wand', name: '견습 지팡이', slot: 'weapon', who: ['mir'], mag: 3, atk: 1, price: 30, desc: '마법학교 매점표. 끝이 살짝 휘었다.' },
+  gi: { id: 'gi', name: '솜 도복', slot: 'armor', def: 3, hp: 6, price: 40, desc: '두툼한 솜을 넣은 도복.' },
+  cape: { id: 'cape', name: '털실 망토', slot: 'armor', def: 2, spd: 1, price: 35, desc: '할머니가 떠 준 망토. 따뜻하다.' },
+  band: { id: 'band', name: '바람 머리띠', slot: 'charm', spd: 2, skill: 'gale', price: 0, desc: '바람의 기운이 깃든 머리띠. 「질풍 돌려차기」를 쓸 수 있다.' },
+  shell: { id: 'shell', name: '거북 등껍질', slot: 'armor', def: 6, spd: -1, skill: 'wall', price: 0, desc: '단단한 등껍질. 「등껍질 철벽」을 쓸 수 있다.' },
+  starWand: { id: 'starWand', name: '별빛 지팡이', slot: 'weapon', who: ['mir'], mag: 6, skill: 'starfall', price: 0, desc: '별가루가 반짝이는 지팡이. 「별똥별 우수수」를 쓸 수 있다.' },
+  claw: { id: 'claw', name: '곰발톱 장갑', slot: 'weapon', who: ['haru'], atk: 8, skill: 'bearClaw', price: 0, desc: '곰발톱이 떨군 장갑. 「곰발톱 연타」를 쓸 수 있다.' },
+  acorn: { id: 'acorn', name: '도토리 부적', slot: 'charm', hp: 12, def: 1, price: 25, desc: '숲의 정령이 깃든 도토리. 튼튼해진다.' },
+};
+
 // ---------------- 기술 ----------------
 export interface SkillDef {
   id: string;
@@ -63,24 +96,32 @@ export interface SkillDef {
   /** 0 = 한 칸, 1 = 주변 십자 범위까지 */
   area: number;
   power: number;
-  kind: 'dmg' | 'heal';
+  kind: 'dmg' | 'heal' | 'guard';
   stat: 'atk' | 'mag';
   target: 'foe' | 'ally';
   desc: string;
   /** 주문 실수 확률 */
   misfire?: number;
+  /** 전투 이펙트 */
+  fx: Fx;
 }
+export type Fx = 'slash' | 'fire' | 'ice' | 'heal' | 'wind' | 'spore' | 'quake' | 'star' | 'punch' | 'shield';
 export const SKILLS: Record<string, SkillDef> = {
-  whirl: { id: 'whirl', name: '회오리 발차기', mp: 4, range: 1, area: 1, power: 1.1, kind: 'dmg', stat: 'atk', target: 'foe', desc: '빙글 돌며 앞과 주변을 함께 찬다.' },
-  onigiriPower: { id: 'onigiriPower', name: '주먹밥 기합', mp: 3, range: 1, area: 0, power: 1.6, kind: 'heal', stat: 'atk', target: 'ally', desc: '주먹밥을 먹고 기합! 나나 옆 동료의 HP 회복.' },
-  fire: { id: 'fire', name: '불꽃 톡톡', mp: 3, range: 3, area: 0, power: 1.6, kind: 'dmg', stat: 'mag', target: 'foe', desc: '작은 불꽃을 날린다. 가끔 실수한다.', misfire: 0.12 },
-  ice: { id: 'ice', name: '얼음 와르르', mp: 7, range: 3, area: 1, power: 1.25, kind: 'dmg', stat: 'mag', target: 'foe', desc: '얼음 덩어리를 와르르. 주변에도 맞는다.', misfire: 0.12 },
-  heal: { id: 'heal', name: '반짝 치유', mp: 4, range: 2, area: 0, power: 2.2, kind: 'heal', stat: 'mag', target: 'ally', desc: '반짝반짝 상처를 낫게 한다.' },
+  whirl: { id: 'whirl', name: '회오리 발차기', mp: 4, range: 1, area: 1, power: 1.1, kind: 'dmg', stat: 'atk', target: 'foe', desc: '빙글 돌며 앞과 주변을 함께 찬다.' , fx: 'wind' },
+  onigiriPower: { id: 'onigiriPower', name: '주먹밥 기합', mp: 3, range: 1, area: 0, power: 1.6, kind: 'heal', stat: 'atk', target: 'ally', desc: '주먹밥을 먹고 기합! 나나 옆 동료의 HP 회복.' , fx: 'heal' },
+  fire: { id: 'fire', name: '불꽃 톡톡', mp: 3, range: 3, area: 0, power: 1.6, kind: 'dmg', stat: 'mag', target: 'foe', desc: '작은 불꽃을 날린다. 가끔 실수한다.', misfire: 0.12 , fx: 'fire' },
+  ice: { id: 'ice', name: '얼음 와르르', mp: 7, range: 3, area: 1, power: 1.25, kind: 'dmg', stat: 'mag', target: 'foe', desc: '얼음 덩어리를 와르르. 주변에도 맞는다.', misfire: 0.12 , fx: 'ice' },
+  heal: { id: 'heal', name: '반짝 치유', mp: 4, range: 2, area: 0, power: 2.2, kind: 'heal', stat: 'mag', target: 'ally', desc: '반짝반짝 상처를 낫게 한다.' , fx: 'heal' },
+  // 장비에 달린 기술
+  bearClaw: { id: 'bearClaw', name: '곰발톱 연타', mp: 5, range: 1, area: 0, power: 2.1, kind: 'dmg', stat: 'atk', target: 'foe', desc: '곰발톱 장갑으로 마구 할퀸다. 아주 세다.', fx: 'punch' },
+  starfall: { id: 'starfall', name: '별똥별 우수수', mp: 9, range: 4, area: 1, power: 1.5, kind: 'dmg', stat: 'mag', target: 'foe', desc: '별빛 지팡이로 별을 쏟아붓는다. 범위 공격.', fx: 'star', misfire: 0.08 },
+  wall: { id: 'wall', name: '등껍질 철벽', mp: 2, range: 0, area: 1, power: 0, kind: 'guard', stat: 'atk', target: 'ally', desc: '나와 주변 동료가 다음 차례까지 받는 피해 절반.', fx: 'shield' },
+  gale: { id: 'gale', name: '질풍 돌려차기', mp: 4, range: 2, area: 0, power: 1.45, kind: 'dmg', stat: 'atk', target: 'foe', desc: '바람을 타고 두 칸 앞까지 날아 찬다.', fx: 'wind' },
   // 몬스터
-  spore: { id: 'spore', name: '재채기 포자', mp: 0, range: 2, area: 0, power: 1.1, kind: 'dmg', stat: 'atk', target: 'foe', desc: '' },
-  bearPunch: { id: 'bearPunch', name: '곰발톱 펀치', mp: 0, range: 1, area: 0, power: 1.7, kind: 'dmg', stat: 'atk', target: 'foe', desc: '' },
-  bearRoar: { id: 'bearRoar', name: '땅 울리기', mp: 0, range: 2, area: 1, power: 0.9, kind: 'dmg', stat: 'atk', target: 'foe', desc: '' },
-  honeyTime: { id: 'honeyTime', name: '꿀 먹기', mp: 0, range: 0, area: 0, power: 2, kind: 'heal', stat: 'atk', target: 'ally', desc: '' },
+  spore: { id: 'spore', name: '재채기 포자', mp: 0, range: 2, area: 0, power: 1.1, kind: 'dmg', stat: 'atk', target: 'foe', desc: '' , fx: 'spore' },
+  bearPunch: { id: 'bearPunch', name: '곰발톱 펀치', mp: 0, range: 1, area: 0, power: 1.7, kind: 'dmg', stat: 'atk', target: 'foe', desc: '' , fx: 'punch' },
+  bearRoar: { id: 'bearRoar', name: '땅 울리기', mp: 0, range: 2, area: 1, power: 0.9, kind: 'dmg', stat: 'atk', target: 'foe', desc: '' , fx: 'quake' },
+  honeyTime: { id: 'honeyTime', name: '꿀 먹기', mp: 0, range: 0, area: 0, power: 2, kind: 'heal', stat: 'atk', target: 'ally', desc: '' , fx: 'heal' },
 };
 
 /** 미르의 주문 실수 (재미로) */
@@ -151,7 +192,7 @@ export const FOES: Record<string, FoeDef> = {
   bat: { id: 'bat', name: '찍찍박쥐', shape: 'bat', colors: ['#6a4a8a', '#4a2a6a'], hp: 17, atk: 11, mag: 0, def: 2, spd: 11, mv: 4, exp: 8, gold: 6, fly: true },
   rock: { id: 'rock', name: '돌돌이', shape: 'rock', colors: ['#9a9aa8', '#6a6a78'], hp: 34, atk: 14, mag: 0, def: 10, spd: 2, mv: 1, exp: 13, gold: 11, drop: 'candy' },
   bandit: { id: 'bandit', name: '꼬마 산적', look: LOOKS.bandit, hp: 30, atk: 14, mag: 0, def: 5, spd: 7, mv: 3, exp: 14, gold: 16, drop: 'onigiri' },
-  bear: { id: 'bear', name: '곰발톱', look: LOOKS.bear, hp: 170, atk: 17, mag: 0, def: 8, spd: 5, mv: 2, exp: 140, gold: 220, skills: ['bearPunch', 'bearRoar', 'honeyTime'], boss: true, drop: 'honey' },
+  bear: { id: 'bear', name: '곰발톱', look: LOOKS.bear, hp: 220, atk: 20, mag: 0, def: 10, spd: 5, mv: 2, exp: 140, gold: 220, skills: ['bearPunch', 'bearRoar', 'honeyTime'], boss: true, drop: 'honey' },
 };
 
 // ---------------- 지도 ----------------
@@ -205,7 +246,7 @@ export const MAPS: Record<string, MapDef> = {
       'TTTTTTTTTTTT=TTTTTTTTTTTTTTT',
       'T...........=.........,,...T',
       'T..,,.......=.....TT.......T',
-      'T...........=....TTTT......T',
+      'T...........=....TTTT.....CT',
       'T....TT.....=.....TT...~~~.T',
       'T...TTTT....=.........~~~~.T',
       'T....TT.....======....~~~~.T',
@@ -315,6 +356,7 @@ export type Step =
   | { join: string }
   | { set: string }
   | { give: string; n?: number }
+  | { equip: string }
   | { gold: number }
   | { healAll: true }
   | { shop: string[] }
@@ -408,7 +450,7 @@ export const NPCS: NpcDef[] = [
     y: 9,
     look: 'shop',
     name: '잡화점 장사꾼',
-    talk: () => [{ who: '잡화점 장사꾼', say: '어서 옵쇼! 모험엔 주먹밥, 마법엔 별사탕! 둘러보시라~' }, { shop: ['onigiri', 'candy'] }],
+    talk: () => [{ who: '잡화점 장사꾼', say: '어서 옵쇼! 모험엔 주먹밥, 마법엔 별사탕! 장비도 있수다~' }, { shop: ['onigiri', 'candy', 'stick', 'wand', 'gi', 'cape', 'acorn'] }],
   },
   {
     id: 'inn',
@@ -424,7 +466,7 @@ export const NPCS: NpcDef[] = [
     map: 'village',
     x: 13,
     y: 16,
-    look: 'kid',
+    look: 'guard',
     name: '마을 입구 아저씨',
     talk: () => S('마을 입구 아저씨', '남쪽 길로 나가면 바람 언덕이야. 풀숲을 걸으면 몬스터가 튀어나오니 조심해!', '힘들면 마을로 돌아와 여관에서 쉬렴. 여관에선 모험 기록도 남길 수 있단다.'),
   },
@@ -467,7 +509,7 @@ export const NPCS: NpcDef[] = [
     map: 'forest',
     x: 5,
     y: 13,
-    look: 'kid',
+    look: 'woodcutter',
     name: '나무꾼',
     talk: () => S('나무꾼', '이 숲 동쪽 끝 동굴이 곰발톱 패거리 소굴이야. 박쥐가 많으니 회복약을 챙기게.', '상자는 가까이 가서 말을 걸면 열 수 있다네.'),
   },
@@ -509,7 +551,8 @@ export const NPCS: NpcDef[] = [
       { who: '미르', say: '여덟 개의 종…? 마법학교 교과서에 나오는 전설이잖아!' },
       { set: 'bell' },
       { give: 'honey' },
-      { who: '', say: '솔방울 마을의 종을 되찾았다! 꿀단지도 얻었다.' },
+      { equip: 'claw' },
+      { who: '', say: '솔방울 마을의 종을 되찾았다! 꿀단지와 「곰발톱 장갑」도 얻었다. (메뉴 → 장비)' },
       { song: 'field' },
     ],
   },
@@ -520,14 +563,16 @@ export interface ChestDef {
   x: number;
   y: number;
   item?: string;
+  equip?: string;
   gold?: number;
 }
 export const CHESTS: ChestDef[] = [
-  { map: 'forest', x: 14, y: 2, item: 'candy' },
+  { map: 'forest', x: 14, y: 2, equip: 'band' },
   { map: 'forest', x: 3, y: 14, gold: 30 },
   { map: 'cave', x: 3, y: 5, item: 'onigiri' },
-  { map: 'cave', x: 22, y: 3, item: 'honey' },
-  { map: 'cave', x: 3, y: 12, gold: 60 },
+  { map: 'cave', x: 22, y: 3, equip: 'starWand' },
+  { map: 'cave', x: 3, y: 12, equip: 'shell' },
+  { map: 'field', x: 26, y: 3, gold: 40 },
   { map: 'cave', x: 23, y: 12, item: 'candy' },
 ];
 

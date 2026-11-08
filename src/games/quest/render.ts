@@ -1,6 +1,6 @@
 // 주먹밥 용사전 그리기: 16×16 도트 타일을 3배로, 인물도 도트로.
 import { BW, BH, type Battle, type Unit } from './battle.ts';
-import { LOOKS, MAPS, NPCS, type Terrain } from './data.ts';
+import { LOOKS, MAPS, NPCS, type Fx as FxKind, type Terrain } from './data.ts';
 import { blit, cached, monster, person, type Dir, type Look } from './pixel.ts';
 import { tileAt, type WorldState } from './world.ts';
 
@@ -305,6 +305,21 @@ export function renderWorld(ctx: Ctx, w: WorldState, view: View, time: number) {
   people.push({ x: view.px, y: view.py, draw: () => sprite(ctx, 'haru', view.dir, frame, view.px * T - cx, view.py * T - cy, 3) });
   people.sort((a, b) => a.y - b.y);
   for (const p of people) p.draw();
+  // 가까운 사람 이름표
+  for (const n of NPCS) {
+    if (n.map !== w.map || n.hidden?.(w.flags)) continue;
+    if (Math.abs(n.x - view.px) + Math.abs(n.y - view.py) > 2.5) continue;
+    const sx = n.x * T - cx + T / 2;
+    const sy = n.y * T - cy - (n.look === 'bear' ? 22 : 8);
+    ctx.font = `bold 15px ${FONT}`;
+    const tw = ctx.measureText(n.name).width + 12;
+    ctx.fillStyle = 'rgba(8,8,24,0.85)';
+    ctx.fillRect(sx - tw / 2, sy - 20, tw, 20);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(sx - tw / 2, sy - 20, tw, 20);
+    text(ctx, n.name, sx, sy - 18, 15, '#ffd24a', 'center');
+  }
 }
 
 function sprite(ctx: Ctx, look: string, dir: Dir, frame: number, sx: number, sy: number, scale: number) {
@@ -341,13 +356,31 @@ export function text(ctx: Ctx, s: string, x: number, y: number, size = 22, color
 }
 
 /** 대화창: 글자가 한 자씩 나온다 */
-export function dialogBox(ctx: Ctx, who: string, say: string, shown: number, time: number) {
+/** 얼굴 초상화: 도트 인물의 머리 부분을 크게 */
+export function portrait(ctx: Ctx, look: string | Look, x: number, y: number, size: number, time: number) {
+  const { cv } = personSprite(look, 'down', Math.floor(time * 2) % 2 === 0 ? 0 : 0);
+  ctx.imageSmoothingEnabled = false;
+  const k = size / 16;
+  ctx.fillStyle = '#2a3a6a';
+  ctx.fillRect(x, y, size, size);
+  ctx.drawImage(cv, 1, 0, 16, 13, x, y + size - 13 * k, size, 13 * k);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x, y, size, size);
+}
+
+export function dialogBox(ctx: Ctx, who: string, say: string, shown: number, time: number, look?: string) {
   const bx = 40;
   const by = H - 170;
   windowBox(ctx, bx, by, W - 80, 150);
+  let tx = bx + 30;
+  if (look) {
+    portrait(ctx, look, bx + 22, by + 22, 106, time);
+    tx = bx + 150;
+  }
   let y = by + 24;
   if (who) {
-    text(ctx, who, bx + 30, y, 22, '#ffd24a');
+    text(ctx, who, tx, y, 22, '#ffd24a');
     y += 32;
   }
   const visible = say.slice(0, Math.floor(shown));
@@ -356,14 +389,14 @@ export function dialogBox(ctx: Ctx, who: string, say: string, shown: number, tim
   const lines: string[] = [];
   let cur = '';
   for (const ch of visible) {
-    if (ctx.measureText(cur + ch).width > W - 160) {
+    if (ctx.measureText(cur + ch).width > W - 80 - (tx - bx) - 40) {
       lines.push(cur);
       cur = '';
     }
     cur += ch;
   }
   lines.push(cur);
-  lines.slice(0, 3).forEach((l, i) => text(ctx, l, bx + 30, y + i * 30));
+  lines.slice(0, 3).forEach((l, i) => text(ctx, l, tx, y + i * 30));
   if (shown >= say.length && Math.floor(time * 3) % 2) text(ctx, '▼', W - 90, H - 52, 20);
 }
 
@@ -386,6 +419,17 @@ export interface Fx {
   color: string;
   t: number;
 }
+export interface Effect {
+  kind: FxKind;
+  /** 시전자 칸 → 대상 칸 */
+  fx: number;
+  fy: number;
+  x: number;
+  y: number;
+  area: number;
+  t: number;
+}
+
 export interface BattleView {
   /** 화면 위치 (칸, 부드럽게) */
   pos: Map<number, { x: number; y: number }>;
@@ -395,11 +439,21 @@ export interface BattleView {
   fx: Fx[];
   highlight: [number, number][];
   hlColor: string;
+  /** 기술 이펙트 */
+  effects: Effect[];
+  shake: number;
   cursor?: [number, number];
   message: string;
 }
 
 export function renderBattle(ctx: Ctx, b: Battle, v: BattleView, terrain: Terrain, time: number, active?: Unit) {
+  ctx.save();
+  if (v.shake > 0) ctx.translate((Math.random() - 0.5) * v.shake * 12, (Math.random() - 0.5) * v.shake * 12);
+  drawBattle(ctx, b, v, terrain, time, active);
+  ctx.restore();
+}
+
+function drawBattle(ctx: Ctx, b: Battle, v: BattleView, terrain: Terrain, time: number, active?: Unit) {
   // 배경
   const sky = terrain === 'cave' ? ['#1a1220', '#3a2a3a'] : terrain === 'forest' ? ['#2a5a3a', '#4a8a4a'] : ['#5ab0f0', '#a8e0ff'];
   const gr = ctx.createLinearGradient(0, 0, 0, H);
@@ -507,6 +561,25 @@ export function renderBattle(ctx: Ctx, b: Battle, v: BattleView, terrain: Terrai
     ctx.lineWidth = 4;
     ctx.strokeRect(BOX + x * BT + 2, BOY + y * BT + 2, BT - 4, BT - 4);
   }
+  // 방어 중 방패 표시
+  for (const u of b.alive()) {
+    if (!u.guard) continue;
+    const p = v.pos.get(u.uid) ?? u;
+    const sx = BOX + p.x * BT + BT - 14;
+    const sy = BOY + p.y * BT + 18;
+    ctx.fillStyle = '#7ab8ff';
+    ctx.beginPath();
+    ctx.moveTo(sx - 9, sy - 10);
+    ctx.lineTo(sx + 9, sy - 10);
+    ctx.lineTo(sx + 9, sy);
+    ctx.quadraticCurveTo(sx, sy + 12, sx - 9, sy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  for (const e of v.effects) drawEffect(ctx, e, time);
   // 숫자 튀어오르기
   for (const f of v.fx) {
     const p = v.pos.get(f.uid);
@@ -533,4 +606,209 @@ export function renderBattle(ctx: Ctx, b: Battle, v: BattleView, terrain: Terrai
   // 아래: 메시지
   windowBox(ctx, 20, H - 76, W - 40, 64);
   if (v.message) text(ctx, v.message, 46, H - 56, 22);
+}
+
+// ---------------- 기술 이펙트 ----------------
+const cxOf = (gx: number) => BOX + gx * BT + BT / 2;
+const cyOf = (gy: number) => BOY + gy * BT + BT / 2;
+export const EFFECT_TIME: Record<FxKind, number> = { slash: 0.3, punch: 0.4, fire: 0.75, ice: 0.8, heal: 0.8, wind: 0.6, spore: 0.7, quake: 0.8, star: 0.95, shield: 0.6 };
+
+function px(ctx: Ctx, x: number, y: number, s: number, c: string) {
+  ctx.fillStyle = c;
+  ctx.fillRect(Math.round(x - s / 2), Math.round(y - s / 2), s, s);
+}
+
+function drawEffect(ctx: Ctx, e: Effect, time: number) {
+  const k = Math.min(1, e.t / EFFECT_TIME[e.kind]);
+  const x = cxOf(e.x);
+  const y = cyOf(e.y);
+  const sx = cxOf(e.fx);
+  const sy = cyOf(e.fy);
+  // 범위 기술은 십자 모양 칸도 함께
+  const cells: [number, number][] = [[e.x, e.y]];
+  if (e.area) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (e.x + dx >= 0 && e.x + dx < BW && e.y + dy >= 0 && e.y + dy < BH) cells.push([e.x + dx, e.y + dy]);
+  ctx.save();
+  switch (e.kind) {
+    case 'slash': {
+      ctx.strokeStyle = `rgba(255,255,255,${1 - k})`;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(x - 24 + k * 10, y - 24);
+      ctx.lineTo(x + 24 - k * 10, y + 24);
+      ctx.stroke();
+      break;
+    }
+    case 'punch': {
+      // 별 모양 충격
+      const r = 16 + k * 30;
+      ctx.fillStyle = `rgba(255,230,120,${1 - k})`;
+      ctx.beginPath();
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const rr = i % 2 ? r * 0.45 : r;
+        ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      }
+      ctx.closePath();
+      ctx.fill();
+      for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = `rgba(255,120,60,${1 - k})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(x - 20 + i * 12, y - 26 + k * 8);
+        ctx.lineTo(x - 26 + i * 12, y + 22 + k * 8);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'fire': {
+      // 불덩이가 날아가 터진다
+      const fly = Math.min(1, k / 0.45);
+      if (k < 0.45) {
+        const fx = sx + (x - sx) * fly;
+        const fy = sy + (y - sy) * fly - Math.sin(fly * Math.PI) * 30;
+        for (let i = 0; i < 6; i++) px(ctx, fx - (x - sx) * 0.04 * i, fy - (y - sy) * 0.04 * i, 14 - i * 2, i < 2 ? '#fff4a0' : i < 4 ? '#ffa02a' : '#e8402a');
+      } else {
+        const b = (k - 0.45) / 0.55;
+        for (let i = 0; i < 18; i++) {
+          const a = i * 2.4;
+          const d = b * (20 + (i % 4) * 10);
+          px(ctx, x + Math.cos(a) * d, y + Math.sin(a) * d - b * 20, 10 * (1 - b) + 3, ['#fff4a0', '#ffb02a', '#ff6a2a', '#c8302a'][i % 4]);
+        }
+      }
+      break;
+    }
+    case 'ice': {
+      for (const [gx, gy] of cells) {
+        const cx = cxOf(gx);
+        const cy = cyOf(gy);
+        // 위에서 떨어지는 얼음 기둥
+        const drop = Math.min(1, k / 0.4);
+        const top = cy - 120 + drop * 110;
+        ctx.globalAlpha = k < 0.8 ? 1 : (1 - k) * 5;
+        for (const [ox, h] of [[-12, 26], [0, 38], [12, 22]]) {
+          ctx.fillStyle = '#d8f4ff';
+          ctx.beginPath();
+          ctx.moveTo(cx + ox - 7, top - h);
+          ctx.lineTo(cx + ox + 7, top - h);
+          ctx.lineTo(cx + ox, top + 8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#6ac0ff';
+          ctx.fillRect(cx + ox - 1, top - h, 3, h);
+        }
+        if (drop >= 1) {
+          ctx.fillStyle = `rgba(160,220,255,${0.5 * (1 - k)})`;
+          ctx.fillRect(cx - BT / 2 + 3, cy - BT / 2 + 3, BT - 6, BT - 6);
+        }
+      }
+      break;
+    }
+    case 'heal': {
+      for (const [gx, gy] of e.area ? cells : [[e.x, e.y] as [number, number]]) {
+        const cx = cxOf(gx);
+        const cy = cyOf(gy);
+        ctx.strokeStyle = `rgba(120,255,160,${1 - k})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 24, 28 * (0.5 + k), 8 * (0.5 + k), 0, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let i = 0; i < 8; i++) {
+          const u = (k + i / 8) % 1;
+          const sparkle = Math.floor(time * 12 + i) % 2 ? '#ffffff' : '#9affb0';
+          px(ctx, cx + Math.sin(i * 2.1) * 22, cy + 24 - u * 60, 5, sparkle);
+        }
+      }
+      break;
+    }
+    case 'wind': {
+      // 시전자에서 대상까지 휘감는 바람 고리
+      for (let i = 0; i < 3; i++) {
+        const u = Math.min(1, k * 1.4 - i * 0.15);
+        if (u <= 0) continue;
+        const cx = sx + (x - sx) * u;
+        const cy = sy + (y - sy) * u;
+        ctx.strokeStyle = `rgba(200,255,240,${1 - u * 0.8})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 18 + i * 8, time * 14 + i, time * 14 + i + Math.PI * 1.4);
+        ctx.stroke();
+      }
+      for (const [gx, gy] of cells) {
+        ctx.strokeStyle = `rgba(255,255,255,${(1 - k) * 0.8})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cxOf(gx), cyOf(gy), 10 + k * 26, k * 9, k * 9 + 4);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'spore': {
+      for (let i = 0; i < 14; i++) {
+        const u = Math.min(1, k * 1.3 - (i % 5) * 0.05);
+        const cx = sx + (x - sx) * u + Math.sin(i * 3 + time * 4) * 14;
+        const cy = sy + (y - sy) * u + Math.cos(i * 2) * 12 - u * 10;
+        ctx.globalAlpha = 1 - k * 0.8;
+        px(ctx, cx, cy, 7 + (i % 3) * 3, i % 2 ? '#e8e070' : '#c8b850');
+      }
+      break;
+    }
+    case 'quake': {
+      for (let i = 0; i < 2; i++) {
+        const u = Math.max(0, k - i * 0.2);
+        ctx.strokeStyle = `rgba(200,150,90,${1 - u})`;
+        ctx.lineWidth = 8 * (1 - u) + 2;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy + 26, 30 + u * 140, 10 + u * 46, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      for (const [gx, gy] of cells) for (let i = 0; i < 4; i++) px(ctx, cxOf(gx) + (i - 1.5) * 14, cyOf(gy) + 20 - Math.sin(k * Math.PI) * (16 + i * 6), 8, '#8a6a4a');
+      break;
+    }
+    case 'star': {
+      for (const [gx, gy] of cells) {
+        const cx = cxOf(gx);
+        const cy = cyOf(gy);
+        for (let i = 0; i < 3; i++) {
+          const u = Math.min(1, Math.max(0, k * 1.6 - i * 0.2));
+          if (u <= 0 || u >= 1) continue;
+          const fx = cx + 50 - u * 50 + i * 8;
+          const fy = cy - 140 + u * 140;
+          ctx.strokeStyle = 'rgba(255,240,160,0.6)';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(fx + 30, fy - 40);
+          ctx.lineTo(fx, fy);
+          ctx.stroke();
+          star(ctx, fx, fy, 12, '#fff1a0');
+        }
+        if (k > 0.6) star(ctx, cx, cy, 10 + (k - 0.6) * 60, `rgba(255,220,90,${(1 - k) * 2.5})`);
+      }
+      break;
+    }
+    case 'shield': {
+      for (const [gx, gy] of cells) {
+        ctx.strokeStyle = `rgba(120,190,255,${1 - k})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(cxOf(gx), cyOf(gy), 20 + k * 14, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = `rgba(120,190,255,${0.25 * (1 - k)})`;
+        ctx.fill();
+      }
+      break;
+    }
+  }
+  ctx.restore();
+}
+
+function star(ctx: Ctx, x: number, y: number, r: number, c: string) {
+  ctx.fillStyle = c;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i / 10) * Math.PI * 2;
+    const rr = i % 2 ? r * 0.45 : r;
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
 }

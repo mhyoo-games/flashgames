@@ -81,10 +81,10 @@ export interface Look {
   top: string;
   trim?: string;
   pants: string;
-  hat?: 'headband' | 'witch' | 'bandana' | 'hood' | 'cap' | 'crown';
+  hat?: 'headband' | 'witch' | 'bandana' | 'hood' | 'cap' | 'crown' | 'helm';
   hatColor?: string;
   beard?: string;
-  prop?: 'staff' | 'abacus' | 'club' | 'ladle';
+  prop?: 'staff' | 'abacus' | 'club' | 'ladle' | 'axe' | 'spear';
   ears?: 'raccoon' | 'bear' | 'cat';
   /** 치마·도포처럼 긴 옷 */
   robe?: boolean;
@@ -122,7 +122,12 @@ export function person(L: Look, dir: Dir, frame: number): Pix {
     p.set(7, 11, L.trim);
     p.set(8, 11, L.trim);
   }
-  if (L.belt) p.rect(4, 12, 8, 1, L.belt);
+  if (L.belt) {
+    p.rect(4, 12, 8, 1, L.belt);
+    if (!back && !side) p.rect(7, 12, 2, 2, L.belt);
+  }
+  // 목 그림자 (머리와 몸 경계를 또렷하게)
+  if (!back) p.rect(6, 10, 4, 1, L.trim ?? L.top);
   // 팔 (걸을 때 흔들기)
   const sw = step ? 1 : 0;
   if (side) {
@@ -186,22 +191,30 @@ export function person(L: Look, dir: Dir, frame: number): Pix {
     if (L.hairStyle !== 'bald') p.disc(7.5, 5, 5, 4.2, H);
   } else {
     // 얼굴
-    const ex = side ? (dir === 'right' ? [9, 12] : [3, 6]) : [5, 10];
     const eyes = L.eyes ?? 'dot';
-    for (const x of side ? [ex[1] - (dir === 'right' ? 0 : 3)] : ex) {
-      if (eyes === 'sleepy') p.set(x, 7, '#3a2028', true);
-      else if (eyes === 'glow') {
-        p.set(x, 6, '#ffe14a', true);
-        p.set(x, 7, '#ff8a1a', true);
+    // 큰 눈 (두 칸 너비, 반짝이 한 점)
+    const eyeXs = side ? [dir === 'right' ? 10 : 4] : [4, 10];
+    for (const x of eyeXs) {
+      if (eyes === 'sleepy') {
+        p.rect(x, 7, 2, 1, '#3a2028', true);
+      } else if (eyes === 'glow') {
+        p.rect(x, 6, 2, 2, '#ffb02a', true);
+        p.set(x, 6, '#fff4a0', true);
       } else {
-        p.set(x, 6, '#1a1020', true);
-        p.set(x, 7, '#1a1020', true);
-        p.set(x, 6 - 0, '#1a1020', true);
+        p.rect(x, 5, 2, 3, '#1a1020', true);
+        p.set(x, 5, '#ffffff', true);
+        p.set(x + 1, 7, '#5a4a8a', true);
       }
     }
+    // 입
+    if (eyes !== 'glow' && !L.beard) p.set(side ? (dir === 'right' ? 11 : 4) : 7, 9, '#b04a4a', true);
+    if (!side && eyes !== 'glow' && !L.beard) p.set(8, 9, '#d86a6a', true);
     if (eyes === 'mask') {
-      for (let x = 3; x <= 12; x++) if (!side || (dir === 'right' ? x > 6 : x < 9)) p.set(x, 6, '#3a2a30', true);
-      for (const x of side ? [dir === 'right' ? 11 : 4] : [5, 10]) p.set(x, 6, '#ffffff', true);
+      for (let x = 3; x <= 12; x++) if (!side || (dir === 'right' ? x > 6 : x < 9)) p.rect(x, 5, 1, 3, '#3a2a30', true);
+      for (const x of eyeXs) {
+        p.set(x, 6, '#ffffff', true);
+        p.set(x + 1, 6, '#1a1020', true);
+      }
     }
     // 볼
     if (!side) {
@@ -254,6 +267,13 @@ export function person(L: Look, dir: Dir, frame: number): Pix {
       p.rect(3, 1, 10, 2, HC);
       if (!back) p.rect(side ? (dir === 'right' ? 9 : 1) : 4, 3, side ? 6 : 8, 1, HC);
       break;
+    case 'helm':
+      p.rect(3, 0, 10, 4, HC);
+      p.rect(2, 3, 12, 1, HC);
+      p.set(7, -1, '#e84a4a');
+      p.set(8, -1, '#e84a4a');
+      if (!back) p.rect(7, 4, 2, 2, HC);
+      break;
     case 'crown':
       p.rect(4, 1, 8, 2, HC);
       for (const x of [4, 7, 8, 11]) p.set(x, 0, HC);
@@ -272,6 +292,14 @@ export function person(L: Look, dir: Dir, frame: number): Pix {
       p.rect(px - 1, 10, 3, 4, '#a0703a');
       p.set(px, 11, '#ffd94a', true);
       p.set(px, 13, '#ffd94a', true);
+    } else if (L.prop === 'axe') {
+      p.rect(px, 7, 1, 8, '#8a5a2a');
+      p.rect(px - 1, 6, 3, 3, '#c8c8d8');
+      p.set(px + 1, 9, '#c8c8d8');
+    } else if (L.prop === 'spear') {
+      p.rect(px, 2, 1, 14, '#8a5a2a');
+      p.rect(px - 1, 0, 3, 2, '#d8d8e8');
+      p.set(px, -1, '#d8d8e8');
     } else if (L.prop === 'ladle') {
       p.rect(px, 7, 1, 7, '#b0b0b8');
       p.disc(px, 6, 1.2, 1, '#c8c8d0');

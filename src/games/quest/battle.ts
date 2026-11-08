@@ -33,12 +33,15 @@ export interface Unit {
   skills: string[];
   /** 꿀 먹기 같은 횟수 제한 */
   uses: number;
+  /** 방어 중 (다음 차례까지 피해 절반) */
+  guard: boolean;
 }
 
-export type Action = { kind: 'attack' } | { kind: 'skill'; id: string } | { kind: 'item'; id: string } | { kind: 'wait' } | { kind: 'flee' };
+export type Action = { kind: 'attack' } | { kind: 'skill'; id: string } | { kind: 'item'; id: string } | { kind: 'guard' } | { kind: 'wait' } | { kind: 'flee' };
 
 export type BEvent =
-  | { t: 'act'; uid: number; tx: number; ty: number; name?: string }
+  | { t: 'act'; uid: number; tx: number; ty: number; name?: string; skill?: string }
+  | { t: 'guard'; uid: number }
   | { t: 'hit'; uid: number; dmg: number; crit?: boolean }
   | { t: 'heal'; uid: number; n: number; mp?: boolean }
   | { t: 'miss'; uid: number }
@@ -70,7 +73,7 @@ export class Battle {
     let uid = 0;
     w.party.forEach((m, i) => {
       const s = stats(m);
-      this.units.push({ uid: uid++, name: HEROES[m.id].name, side: 'hero', member: i, defId: m.id, look: HEROES[m.id].look, x: 1, y: [2, 1, 3][i] ?? i, hp: m.hp, maxHp: s.hp, mp: m.mp, maxMp: s.mp, atk: s.atk, mag: s.mag, def: s.def, spd: s.spd, mv: s.mv, fly: false, boss: false, skills: skillsOf(m), uses: 0 });
+      this.units.push({ uid: uid++, name: HEROES[m.id].name, side: 'hero', member: i, defId: m.id, look: HEROES[m.id].look, x: 1, y: [2, 1, 3][i] ?? i, hp: m.hp, maxHp: s.hp, mp: m.mp, maxMp: s.mp, atk: s.atk, mag: s.mag, def: s.def, spd: s.spd, mv: s.mv, fly: false, boss: false, skills: skillsOf(m), uses: 0, guard: false });
     });
     const spots: [number, number][] = foes.length === 1 ? [[6, 2]] : [[6, 1], [6, 3], [7, 2], [5, 2], [7, 0], [7, 4]];
     // 같은 이름이 여럿이면 A·B·C
@@ -80,7 +83,7 @@ export class Battle {
       count[id] = (count[id] ?? 0) + 1;
       const many = foes.filter((x) => x === id).length > 1;
       const [x, y] = f.boss ? [6, 2] : spots[i] ?? [7, i % BH];
-      this.units.push({ uid: uid++, name: many ? `${f.name} ${'ABCDEF'[count[id] - 1]}` : f.name, side: 'foe', defId: id, look: f.look, shape: f.shape, colors: f.colors, x, y, hp: f.hp, maxHp: f.hp, mp: 0, maxMp: 0, atk: f.atk, mag: f.mag, def: f.def, spd: f.spd, mv: f.mv, fly: !!f.fly, boss: !!f.boss, skills: f.skills ?? [], uses: 0 });
+      this.units.push({ uid: uid++, name: many ? `${f.name} ${'ABCDEF'[count[id] - 1]}` : f.name, side: 'foe', defId: id, look: f.look, shape: f.shape, colors: f.colors, x, y, hp: f.hp, maxHp: f.hp, mp: 0, maxMp: 0, atk: f.atk, mag: f.mag, def: f.def, spd: f.spd, mv: f.mv, fly: !!f.fly, boss: !!f.boss, skills: f.skills ?? [], uses: 0, guard: false });
     });
     // 보스가 있으면 다른 적이 겹치지 않게
     if (this.boss) {
@@ -103,6 +106,7 @@ export class Battle {
       .sort((a, b) => b.k - a.k)
       .map((o) => o.u.uid);
     this.turn = 0;
+    if (this.order.length) this.unit(this.order[0]).guard = false;
   }
 
   alive(side?: 'hero' | 'foe') {
@@ -197,7 +201,8 @@ export class Battle {
     if (canCrit && this.rng() < 0.04) return [{ t: 'miss', uid: dst.uid }];
     const crit = canCrit && this.rng() < 1 / 14;
     const base = src[stat] * power * (0.9 + this.rng() * 0.2);
-    const dmg = Math.max(1, Math.round(crit ? base * 1.6 : base - dst.def * 0.55));
+    let dmg = Math.max(1, Math.round(crit ? base * 1.6 : base - dst.def * 0.55));
+    if (dst.guard) dmg = Math.max(1, Math.round(dmg / 2));
     dst.hp = Math.max(0, dst.hp - dmg);
     ev.push({ t: 'hit', uid: dst.uid, dmg, crit });
     if (dst.hp <= 0) ev.push({ t: 'die', uid: dst.uid });
@@ -210,6 +215,10 @@ export class Battle {
     const ev: BEvent[] = [];
     switch (a.kind) {
       case 'wait':
+        break;
+      case 'guard':
+        u.guard = true;
+        ev.push({ t: 'guard', uid: u.uid }, { t: 'msg', text: `${u.name}은(는) 몸을 굳게 지키고 있다!` });
         break;
       case 'flee': {
         if (this.rng() < 0.65) {
@@ -247,14 +256,17 @@ export class Battle {
         const s = SKILLS[a.id];
         if (!target || u.mp < s.mp) break;
         u.mp -= s.mp;
-        ev.push({ t: 'act', uid: u.uid, tx: target.x, ty: target.y, name: s.name });
+        ev.push({ t: 'act', uid: u.uid, tx: target.x, ty: target.y, name: s.name, skill: s.id });
         if (s.misfire && this.rng() < s.misfire) {
           ev.push({ t: 'msg', text: MISFIRES[Math.floor(this.rng() * MISFIRES.length)] });
           break;
         }
         const hitList = this.alive(target.side).filter((o) => Math.abs(o.x - target.x) + Math.abs(o.y - target.y) <= s.area);
         for (const o of hitList) {
-          if (s.kind === 'heal') {
+          if (s.kind === 'guard') {
+            o.guard = true;
+            ev.push({ t: 'guard', uid: o.uid });
+          } else if (s.kind === 'heal') {
             const n = Math.min(o.maxHp - o.hp, Math.round(u[s.stat] * s.power * (0.9 + this.rng() * 0.2) + 4));
             o.hp += n;
             ev.push({ t: 'heal', uid: o.uid, n });
@@ -284,6 +296,7 @@ export class Battle {
         this.newRound();
       }
     } while (this.current.hp <= 0);
+    this.current.guard = false;
   }
 
   // ---------------- 컴퓨터 ----------------

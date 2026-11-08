@@ -1,6 +1,6 @@
 // 필드 이동 규칙: 걷기·부딪힘·말 걸기·상자·지도 이동·적 만남 (그리기와 분리)
 import type { Rng } from '../../core/rng.ts';
-import { CHESTS, expFor, HEROES, ITEMS, MAPS, NPCS, SIGNS, TRIGGERS, WARPS, type Flags, type NpcDef, type Step } from './data.ts';
+import { CHESTS, EQUIPS, expFor, HEROES, ITEMS, MAPS, NPCS, SIGNS, TRIGGERS, WARPS, type Flags, type NpcDef, type Slot, type Step } from './data.ts';
 
 export type Dir = 'down' | 'up' | 'left' | 'right';
 export const DIRS: Record<Dir, [number, number]> = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
@@ -11,6 +11,8 @@ export interface Member {
   exp: number;
   hp: number;
   mp: number;
+  /** 장착한 장비 */
+  equip?: Partial<Record<Slot, string>>;
 }
 
 export interface WorldState {
@@ -22,6 +24,8 @@ export interface WorldState {
   party: Member[];
   gold: number;
   items: Record<string, number>;
+  /** 가방 속 장비 (장착하지 않은 것) */
+  bag?: Record<string, number>;
   /** 열어 본 상자 "지도:x:y" */
   opened: string[];
   steps: number;
@@ -39,6 +43,7 @@ export function newWorld(): WorldState {
     party: [newMember('haru')],
     gold: 0,
     items: {},
+    bag: {},
     opened: [],
     steps: 0,
     home: ['village', 5, 8],
@@ -61,7 +66,7 @@ export function newMember(id: string, lv = 1): Member {
 export function stats(m: Member) {
   const h = HEROES[m.id];
   const k = m.lv - 1;
-  return {
+  const s = {
     hp: Math.round(h.base.hp + h.grow.hp * k),
     mp: Math.round(h.base.mp + h.grow.mp * k),
     atk: Math.round(h.base.atk + h.grow.atk * k),
@@ -70,10 +75,25 @@ export function stats(m: Member) {
     spd: Math.round(h.base.spd + h.grow.spd * k),
     mv: h.base.mv,
   };
+  for (const id of Object.values(m.equip ?? {})) {
+    const e = id ? EQUIPS[id] : undefined;
+    if (!e) continue;
+    s.atk += e.atk ?? 0;
+    s.mag += e.mag ?? 0;
+    s.def += e.def ?? 0;
+    s.spd += e.spd ?? 0;
+    s.hp += e.hp ?? 0;
+  }
+  return s;
 }
 
 export function skillsOf(m: Member) {
-  return HEROES[m.id].skills.filter(([lv]) => m.lv >= lv).map(([, id]) => id);
+  const own = HEROES[m.id].skills.filter(([lv]) => m.lv >= lv).map(([, id]) => id);
+  for (const id of Object.values(m.equip ?? {})) {
+    const sk = id ? EQUIPS[id]?.skill : undefined;
+    if (sk && !own.includes(sk)) own.push(sk);
+  }
+  return own;
 }
 
 /** 경험치를 받고 오른 레벨들을 돌려준다 */
@@ -172,6 +192,10 @@ export function interact(w: WorldState): Step[] | 'BELL' | undefined {
     const key = `${chest.map}:${chest.x}:${chest.y}`;
     if (w.opened.includes(key)) return [{ who: '', say: '상자는 비어 있다.' }];
     w.opened.push(key);
+    if (chest.equip) {
+      addEquip(w, chest.equip, 1);
+      return [{ who: '', say: `상자를 열었다! 장비 「${EQUIPS[chest.equip].name}」을(를) 얻었다. ${EQUIPS[chest.equip].desc} (메뉴 → 장비)` }];
+    }
     if (chest.item) {
       addItem(w, chest.item, 1);
       return [{ who: '', say: `상자를 열었다! ${ITEMS[chest.item].name}을(를) 얻었다.` }];
@@ -190,6 +214,41 @@ export function interact(w: WorldState): Step[] | 'BELL' | undefined {
   if (t === 'D') return [{ who: '', say: '문이 잠겨 있다. 다들 종 이야기로 밖에 나와 있는 모양이다.' }];
   if (t === '~') return [{ who: '', say: '맑은 물이다. 오리가 꽥 하고 운다.' }];
   return undefined;
+}
+
+export function addEquip(w: WorldState, id: string, n: number) {
+  w.bag = w.bag ?? {};
+  w.bag[id] = (w.bag[id] ?? 0) + n;
+  if (w.bag[id] <= 0) delete w.bag[id];
+}
+
+export function canEquip(memberId: string, equipId: string) {
+  const e = EQUIPS[equipId];
+  return !!e && (!e.who || e.who.includes(memberId));
+}
+
+/** 장비 바꾸기 (id 없으면 벗기). HP·MP는 최대치를 넘지 않게 */
+export function equip(w: WorldState, who: number, slot: Slot, id?: string): boolean {
+  const m = w.party[who];
+  if (!m || (id && (!canEquip(m.id, id) || EQUIPS[id].slot !== slot || !w.bag?.[id]))) return false;
+  m.equip = m.equip ?? {};
+  const old = m.equip[slot];
+  if (old) addEquip(w, old, 1);
+  if (id) {
+    addEquip(w, id, -1);
+    m.equip[slot] = id;
+  } else delete m.equip[slot];
+  const s = stats(m);
+  m.hp = Math.min(m.hp, s.hp);
+  m.mp = Math.min(m.mp, s.mp);
+  return true;
+}
+
+/** 옛 기록 불러오기 */
+export function migrate(w: WorldState): WorldState {
+  w.bag = w.bag ?? {};
+  for (const m of w.party) m.equip = m.equip ?? {};
+  return w;
 }
 
 export function addItem(w: WorldState, id: string, n: number) {
@@ -232,6 +291,7 @@ export function applyStep(w: WorldState, s: Step): string | undefined {
     if (!w.party.some((m) => m.id === s.join)) w.party.push(newMember(s.join, Math.max(1, w.party[0].lv - 1)));
   } else if ('set' in s) w.flags[s.set] = true;
   else if ('give' in s) addItem(w, s.give, s.n ?? 1);
+  else if ('equip' in s) addEquip(w, s.equip, 1);
   else if ('gold' in s) w.gold += s.gold;
   else if ('healAll' in s) healAll(w);
   else if ('warp' in s) [w.map, w.x, w.y] = s.warp;

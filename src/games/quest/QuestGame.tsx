@@ -4,10 +4,10 @@ import { random, seeded } from '../../core/rng';
 import { load, save } from '../../core/storage';
 import { Shell, useLoop } from '../../ui/common';
 import { Battle, BH, BW, type Action, type BEvent, type Unit } from './battle';
-import { BELL_EVENT, CHAPTERS, expFor, HEROES, ITEMS, MAPS, OPENING, PROLOGUE, SKILLS, SUBTITLE, TITLE, type Step } from './data';
-import { BOX, BOY, BT, dialogBox, H, mapBanner, personSprite, renderBattle, renderWorld, text, W, type BattleView, type View } from './render';
+import { BELL_EVENT, CHAPTERS, EQUIPS, expFor, HEROES, ITEMS, MAPS, NPCS, OPENING, PROLOGUE, SKILLS, SLOT_NAME, SUBTITLE, TITLE, type Slot, type Step } from './data';
+import { BOX, BOY, BT, dialogBox, EFFECT_TIME, H, mapBanner, personSprite, renderBattle, renderWorld, text, W, type BattleView, type View } from './render';
 import { blit } from './pixel';
-import { applyStep, gainExp, healAll, interact, newWorld, stats, step, useItem, wipeOut, type Dir, type WorldState } from './world';
+import { addEquip, applyStep, canEquip, equip, gainExp, healAll, interact, migrate, newWorld, skillsOf, stats, step, useItem, wipeOut, type Dir, type WorldState } from './world';
 
 const SAVE = 'quest-v1';
 interface Saved {
@@ -45,7 +45,7 @@ export function QuestGame({ onBack }: { onBack: () => void }) {
             setScreen('play');
           }}
           onLoad={() => {
-            setWorld(saved!.w);
+            setWorld(migrate(saved!.w));
             setScreen('play');
           }}
         />
@@ -127,6 +127,7 @@ type Overlay =
   | { kind: 'menu' }
   | { kind: 'status' }
   | { kind: 'items' }
+  | { kind: 'equip'; who?: number; slot?: Slot }
   | { kind: 'shop'; items: string[] }
   | { kind: 'inn'; price: number }
   | { kind: 'end' }
@@ -225,7 +226,7 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
   const startBattle = (foes: string[], boss: boolean, noFlee: boolean) => {
     const b = new Battle(w, foes, rng, { boss, noFlee });
     const pos = new Map(b.units.map((u) => [u.uid, { x: u.x, y: u.y }]));
-    battle.current = { b, view: { pos, lunge: new Map(), flash: new Map(), fx: [], highlight: [], hlColor: '', message: `${b.alive('foe')[0].name}${foes.length > 1 ? ' 무리' : ''}이(가) 나타났다!` }, phase: 'intro', timer: 0, targets: [], ti: 0, pending: [], lines: [], boss };
+    battle.current = { b, view: { pos, lunge: new Map(), flash: new Map(), fx: [], highlight: [], hlColor: '', effects: [], shake: 0, message: `${b.alive('foe')[0].name}${foes.length > 1 ? ' 무리' : ''}이(가) 나타났다!` }, phase: 'intro', timer: 0, targets: [], ti: 0, pending: [], lines: [], boss };
     trans.current = 0.5;
     sound.play(boss ? 'boss' : 'battle');
     sound.sfx('start');
@@ -255,7 +256,15 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
 
   const queueEvents = (events: BEvent[], start: number) => {
     const r = battle.current!;
-    r.pending = events.map((ev, i) => ({ ev, at: start + i * 0.5 }));
+    let at = start;
+    r.pending = events.map((ev) => {
+      const item = { ev, at };
+      // 기술은 이펙트가 끝날 무렵 피해가 뜨고, 범위 피해는 거의 한꺼번에
+      if (ev.t === 'act') at += ev.skill ? EFFECT_TIME[SKILLS[ev.skill].fx] * 0.75 : 0.28;
+      else if (ev.t === 'hit' || ev.t === 'heal' || ev.t === 'guard') at += 0.18;
+      else at += 0.5;
+      return item;
+    });
     r.timer = 0;
     r.phase = 'anim';
     if (!events.length) r.pending = [{ ev: { t: 'msg', text: r.view.message }, at: start }];
@@ -272,13 +281,20 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
         v.lunge.set(ev.uid, { dx: Math.sign(ev.tx - u.x) * (ev.tx !== u.x ? 1 : 0), dy: Math.sign(ev.ty - u.y), t: 0 });
         v.message = ev.name ? `${u.name}의 ${ev.name}!` : `${u.name}의 공격!`;
         sound.sfx(ev.name ? 'special' : 'swing');
+        const sk = ev.skill ? SKILLS[ev.skill] : undefined;
+        const kind = sk ? sk.fx : ev.name ? 'heal' : 'slash';
+        v.effects.push({ kind, fx: u.x, fy: u.y, x: ev.tx, y: ev.ty, area: sk?.area ?? 0, t: 0 });
+        if (kind === 'quake' || kind === 'star') v.shake = 0.6;
         break;
       }
       case 'hit':
         v.flash.set(ev.uid, 0.45);
         v.fx.push({ uid: ev.uid, text: String(ev.dmg), color: ev.crit ? '#ffd24a' : '#ffffff', t: 0 });
         v.message = `${name(ev.uid)}에게 ${ev.dmg}의 피해!`;
-        if (ev.crit) sound.sfx('bighit');
+        if (ev.crit) {
+          sound.sfx('bighit');
+          v.shake = 0.5;
+        }
         break;
       case 'heal':
         v.fx.push({ uid: ev.uid, text: `+${ev.n}`, color: ev.mp ? '#9ad0ff' : '#7aff8a', t: 0 });
@@ -297,6 +313,12 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
       case 'msg':
         v.message = ev.text;
         break;
+      case 'guard': {
+        const u = b.unit(ev.uid);
+        if (!v.effects.some((e) => e.kind === 'shield' && e.t < 0.1)) v.effects.push({ kind: 'shield', fx: u.x, fy: u.y, x: u.x, y: u.y, area: 0, t: 0 });
+        sound.sfx('block');
+        break;
+      }
     }
     const s = SFX[ev.t];
     if (s) sound.sfx(s);
@@ -361,7 +383,7 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
   const chooseAction = (a: Action) => {
     const r = battle.current!;
     const u = r.b.current;
-    if (a.kind === 'wait' || a.kind === 'flee') {
+    if (a.kind === 'wait' || a.kind === 'flee' || a.kind === 'guard') {
       setOverlay(null);
       const ev = r.b.act(u, a, undefined, w);
       if (a.kind === 'wait') ev.push({ t: 'msg', text: `${u.name}은(는) 상황을 살핀다.` });
@@ -373,7 +395,7 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
     r.ti = 0;
     r.phase = 'target';
     r.view.highlight = r.targets.map((t) => [t.x, t.y]);
-    r.view.hlColor = a.kind === 'attack' || (a.kind === 'skill' && SKILLS[a.id].kind === 'dmg') ? 'rgba(255,80,80,0.42)' : 'rgba(90,255,140,0.38)';
+    r.view.hlColor = a.kind === 'attack' || (a.kind === 'skill' && SKILLS[a.id].kind === 'dmg') ? 'rgba(255,80,80,0.42)' : a.kind === 'skill' && SKILLS[a.id].kind === 'guard' ? 'rgba(120,190,255,0.42)' : 'rgba(90,255,140,0.38)';
     r.view.cursor = [r.targets[0].x, r.targets[0].y];
     r.view.message = '누구에게? (방향키로 고르고 확인)';
     setOverlay(null);
@@ -417,6 +439,9 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
       }
       for (const [k, f] of v.flash) v.flash.set(k, f - dt);
       v.fx.forEach((f) => (f.t += dt));
+      v.effects.forEach((f) => (f.t += dt));
+      v.effects = v.effects.filter((f) => f.t < EFFECT_TIME[f.kind]);
+      v.shake = Math.max(0, v.shake - dt * 2);
       v.fx = v.fx.filter((f) => f.t < 1.2);
       if (r.phase === 'intro') {
         r.timer += dt;
@@ -540,7 +565,7 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
     if (!ctx) return;
     renderWorld(ctx, w, vw, time.current);
     mapBanner(ctx, banner.current.name, banner.current.t);
-    if (dialog.current) dialogBox(ctx, dialog.current.who, dialog.current.say, dialog.current.shown, time.current);
+    if (dialog.current) dialogBox(ctx, dialog.current.who, dialog.current.say, dialog.current.shown, time.current, lookOfName(dialog.current.who));
     if (trans.current > 0) drawTransition(ctx, trans.current);
   });
 
@@ -596,6 +621,7 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
             options={[
               { label: '상태', pick: () => setOverlay({ kind: 'status' }) },
               { label: '도구', pick: () => setOverlay({ kind: 'items' }) },
+              { label: '장비', pick: () => setOverlay({ kind: 'equip' }) },
               {
                 label: '기록하기',
                 pick: () => {
@@ -622,6 +648,10 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
                     HP {m.hp}/{s.hp} · MP {m.mp}/{s.mp} · 공격 {s.atk} · 마력 {s.mag} · 방어 {s.def} · 빠르기 {s.spd} · 이동 {s.mv}칸
                   </p>
                   <p>다음 레벨까지 {expFor(m.lv) - m.exp}</p>
+                  <p>
+                    장비: {(['weapon', 'armor', 'charm'] as Slot[]).map((sl) => `${SLOT_NAME[sl]} ${m.equip?.[sl] ? EQUIPS[m.equip[sl]!].name : '없음'}`).join(' · ')}
+                  </p>
+                  <p>기술: {skillsOf(m).map((id) => SKILLS[id].name).join(', ') || '없음'}</p>
                   <p className="dim">{HEROES[m.id].profile}</p>
                 </div>
               );
@@ -648,6 +678,7 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
             note={note || (Object.keys(w.items).length ? '누구에게 쓸까?' : '도구가 없다.')}
           />
         )}
+        {overlay?.kind === 'equip' && <EquipMenu w={w} state={overlay} onState={(o) => setOverlay(o)} onBack={() => setOverlay({ kind: 'menu' })} />}
         {overlay?.kind === 'shop' && (
           <Menu
             title={`가진 돈 ${w.gold}G`}
@@ -656,16 +687,22 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
               close();
             }}
             options={[
-              ...overlay.items.map((id) => ({
-                label: `${ITEMS[id].name}  ${ITEMS[id].price}G  (가진 수 ${w.items[id] ?? 0})`,
-                pick: () => {
-                  if (w.gold < ITEMS[id].price) return setNote('돈이 모자라요!');
-                  w.gold -= ITEMS[id].price;
-                  w.items[id] = (w.items[id] ?? 0) + 1;
-                  sound.sfx('catch');
-                  setNote(`${ITEMS[id].name}을(를) 샀다. ${ITEMS[id].desc}`);
-                },
-              })),
+              ...overlay.items.map((id) => {
+                const it = ITEMS[id] ?? EQUIPS[id];
+                const isEquip = !ITEMS[id];
+                const have = isEquip ? (w.bag?.[id] ?? 0) + w.party.filter((m) => Object.values(m.equip ?? {}).includes(id)).length : (w.items[id] ?? 0);
+                return {
+                  label: `${it.name}  ${it.price}G  ${isEquip ? `[${equipShort(id)}]` : ''} (가진 수 ${have})`,
+                  pick: () => {
+                    if (w.gold < it.price) return setNote('돈이 모자라요!');
+                    w.gold -= it.price;
+                    if (isEquip) addEquip(w, id, 1);
+                    else w.items[id] = (w.items[id] ?? 0) + 1;
+                    sound.sfx('catch');
+                    setNote(`${it.name}을(를) 샀다. ${it.desc}${isEquip ? ' (메뉴 → 장비에서 장착)' : ''}`);
+                  },
+                };
+              }),
               {
                 label: '그만두기',
                 pick: () => {
@@ -758,6 +795,13 @@ function Play({ initial, fresh, onTitle }: { initial: WorldState; fresh: boolean
   );
 }
 
+/** 말하는 사람 이름 → 얼굴 그림 */
+function lookOfName(who: string): string | undefined {
+  const h = Object.values(HEROES).find((x) => x.name === who);
+  if (h) return h.id;
+  return NPCS.find((n) => n.name === who)?.look;
+}
+
 function drawTransition(ctx: CanvasRenderingContext2D, t: number) {
   // 옛날 게임처럼 화면이 줄무늬로 닫혔다 열린다
   const k = Math.min(1, t / 0.4);
@@ -846,10 +890,83 @@ function BattleMenu({ run, w, sub, onSub, onPick, onCancel }: { run: BattleRun; 
         { label: '공격', disabled: !b.canUse(u, { kind: 'attack' }), pick: () => onPick({ kind: 'attack' }) },
         { label: '기술', disabled: !u.skills.length, pick: () => onSub('skill') },
         { label: '도구', disabled: !Object.keys(w.items).length, pick: () => onSub('item') },
+        { label: '방어', pick: () => onPick({ kind: 'guard' }) },
         { label: '대기', pick: () => onPick({ kind: 'wait' }) },
         { label: '도망치기', disabled: b.noFlee, pick: () => onPick({ kind: 'flee' }) },
       ]}
       note={b.canUse(u, { kind: 'attack' }) ? '옆 칸의 적을 때릴 수 있다.' : '때릴 수 있는 적이 옆에 없다. (X: 다시 움직이기)'}
+    />
+  );
+}
+
+/** 장비 능력치 짧게 */
+function equipShort(id: string) {
+  const e = EQUIPS[id];
+  const parts = [SLOT_NAME[e.slot]];
+  if (e.atk) parts.push(`공격${e.atk > 0 ? '+' : ''}${e.atk}`);
+  if (e.mag) parts.push(`마력+${e.mag}`);
+  if (e.def) parts.push(`방어+${e.def}`);
+  if (e.spd) parts.push(`빠르기${e.spd > 0 ? '+' : ''}${e.spd}`);
+  if (e.hp) parts.push(`HP+${e.hp}`);
+  if (e.skill) parts.push(`기술 「${SKILLS[e.skill].name}」`);
+  if (e.who) parts.push(`${e.who.map((h) => HEROES[h].name).join('·')} 전용`);
+  return parts.join(' ');
+}
+
+function EquipMenu({ w, state, onState, onBack }: { w: WorldState; state: { who?: number; slot?: Slot }; onState: (o: { kind: 'equip'; who?: number; slot?: Slot }) => void; onBack: () => void }) {
+  const [note, setNote] = useState('');
+  const [, force] = useState(0);
+  if (state.who === undefined) {
+    return (
+      <Menu
+        key="who"
+        title="장비 · 누구?"
+        onCancel={onBack}
+        options={[...w.party.map((m, i) => ({ label: `${HEROES[m.id].name} Lv ${m.lv}`, pick: () => onState({ kind: 'equip', who: i }) })), { label: '돌아가기', pick: onBack }]}
+        note="상자·가게·보스에게서 얻은 장비를 장착할 수 있다. 기술이 붙은 장비도 있다!"
+      />
+    );
+  }
+  const m = w.party[state.who];
+  const s = stats(m);
+  const statLine = `공격 ${s.atk} · 마력 ${s.mag} · 방어 ${s.def} · 빠르기 ${s.spd} · 최대 HP ${s.hp}`;
+  if (!state.slot) {
+    return (
+      <Menu
+        key={`slots${state.who}`}
+        title={`${HEROES[m.id].name}의 장비`}
+        onCancel={() => onState({ kind: 'equip' })}
+        options={[
+          ...(['weapon', 'armor', 'charm'] as Slot[]).map((sl) => ({ label: `${SLOT_NAME[sl]}: ${m.equip?.[sl] ? EQUIPS[m.equip[sl]!].name : '(없음)'}`, pick: () => onState({ kind: 'equip', who: state.who, slot: sl }) })),
+          { label: '돌아가기', pick: () => onState({ kind: 'equip' }) },
+        ]}
+        note={note || statLine}
+      />
+    );
+  }
+  const slot = state.slot;
+  const choices = Object.keys(w.bag ?? {}).filter((id) => EQUIPS[id].slot === slot && canEquip(m.id, id));
+  const back = () => onState({ kind: 'equip', who: state.who });
+  return (
+    <Menu
+      key={`pick${state.who}${slot}`}
+      title={`${HEROES[m.id].name} · ${SLOT_NAME[slot]}`}
+      onCancel={back}
+      options={[
+        ...choices.map((id) => ({
+          label: `${EQUIPS[id].name}  [${equipShort(id)}]`,
+          pick: () => {
+            equip(w, state.who!, slot, id);
+            sound.sfx('catch');
+            setNote(`${EQUIPS[id].name}을(를) 장착했다! ${EQUIPS[id].desc}`);
+            force((x) => x + 1);
+            back();
+          },
+        })),
+        ...(m.equip?.[slot] ? [{ label: '벗기', pick: () => { equip(w, state.who!, slot); back(); } }] : []),
+        { label: '돌아가기', pick: back },
+      ]}
+      note={choices.length ? statLine : '장착할 수 있는 장비가 없다.'}
     />
   );
 }

@@ -79,9 +79,9 @@ test('덩굴은 미르가 있어야 탄다, 상자는 한 번만', () => {
   w.y = 3;
   w.dir = 'up';
   interact(w);
-  assert.equal(w.items.candy, 1);
+  assert.equal(w.bag?.band, 1);
   interact(w);
-  assert.equal(w.items.candy, 1);
+  assert.equal(w.bag?.band, 1);
 });
 
 test('레벨이 오르면 능력치가 오른다', () => {
@@ -142,7 +142,7 @@ test('보상: 경험치·돈, 전멸하면 돈 절반을 잃고 마을로', () =
   assert.equal(w.party[0].hp, stats(w.party[0]).hp);
 });
 
-test('보스 곰발톱: 레벨 6 두 명이면 대체로 이기고, 레벨 2면 어렵다', () => {
+test('보스 곰발톱: 장비 없이 레벨 7 두 명이면 대체로 이기고, 레벨 2면 어렵다', () => {
   const run = (lv: number) => {
     let wins = 0;
     for (let s = 0; s < 12; s++) {
@@ -152,9 +152,9 @@ test('보스 곰발톱: 레벨 6 두 명이면 대체로 이기고, 레벨 2면 
     }
     return wins;
   };
-  const strong = run(6);
+  const strong = run(7);
   const weak = run(2);
-  assert.ok(strong >= 7, `레벨 6 승리 ${strong}/12`);
+  assert.ok(strong >= 7, `레벨 7 승리 ${strong}/12`);
   assert.ok(weak <= 3, `레벨 2 승리 ${weak}/12`);
 });
 
@@ -182,4 +182,65 @@ test('마을 → 들판 → 숲 → 동굴 → 보스 앞까지 길이 이어져
   assert.ok(seen.has('forest:16:8') || seen.has('forest:15:7'), '미르 옆에 못 감');
   assert.ok(seen.has('village:12:8'), '종탑 옆에 못 감');
   for (const c of CHESTS) assert.ok([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => seen.has(`${c.map}:${c.x + dx}:${c.y + dy}`)), `상자 ${c.map} ${c.x},${c.y}에 못 감`);
+});
+
+test('장비: 장착하면 능력치가 오르고 장비 기술을 쓸 수 있다, 전용 장비는 다른 동료가 못 낀다', async () => {
+  const { equip, addEquip, skillsOf } = await import('../src/games/quest/world.ts');
+  const w = newWorld();
+  w.party.push(newMember('mir'));
+  addEquip(w, 'claw', 1);
+  addEquip(w, 'band', 1);
+  const before = stats(w.party[0]);
+  assert.equal(equip(w, 1, 'weapon', 'claw'), false, '미르는 곰발톱 장갑을 못 낀다');
+  assert.equal(equip(w, 0, 'weapon', 'claw'), true);
+  assert.equal(stats(w.party[0]).atk, before.atk + 8);
+  assert.ok(skillsOf(w.party[0]).includes('bearClaw'));
+  assert.equal(w.bag?.claw, undefined);
+  // 벗으면 가방으로
+  equip(w, 0, 'weapon');
+  assert.equal(w.bag?.claw, 1);
+  assert.ok(!skillsOf(w.party[0]).includes('bearClaw'));
+  // 상자에서 장비
+  w.map = 'forest';
+  w.x = 14;
+  w.y = 3;
+  w.dir = 'up';
+  interact(w);
+  assert.equal(w.bag?.band, 2);
+});
+
+test('방어하면 다음 차례까지 받는 피해가 절반, 모든 기술에 이펙트가 있다', async () => {
+  const { SKILLS } = await import('../src/games/quest/data.ts');
+  for (const s of Object.values(SKILLS)) assert.ok(s.fx, `${s.name} 이펙트 없음`);
+  const dmgWith = (guard: boolean) => {
+    let total = 0;
+    for (let s = 0; s < 30; s++) {
+      const w = newWorld();
+      const b = new Battle(w, ['bandit'], seeded(s));
+      const hero = b.units[0];
+      const foe = b.units[1];
+      foe.x = hero.x + 1;
+      foe.y = hero.y;
+      hero.guard = guard;
+      const hp = hero.hp;
+      b.act(foe, { kind: 'attack' }, hero);
+      total += hp - hero.hp;
+    }
+    return total;
+  };
+  const normal = dmgWith(false);
+  const guarded = dmgWith(true);
+  assert.ok(guarded < normal * 0.65, `방어 ${guarded} / 보통 ${normal}`);
+  // 방어 행동 → 차례가 돌아오면 풀린다
+  const w = newWorld();
+  const b = new Battle(w, ['jelly'], seeded(1));
+  const hero = b.units[0];
+  b.act(hero, { kind: 'guard' });
+  assert.equal(hero.guard, true);
+  for (let i = 0; i < 4 && b.current !== hero; i++) b.endTurn();
+  for (let i = 0; i < 4; i++) {
+    b.endTurn();
+    if (b.current === hero) break;
+  }
+  assert.equal(hero.guard, false);
 });
