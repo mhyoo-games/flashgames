@@ -16,14 +16,24 @@ export interface GameInfo {
 
 export const GAMES: GameInfo[] = [
   {
+    id: 'quest',
+    title: '주먹밥 용사전',
+    tagline: '게으른 무술 소년 하루와 덜렁이 마법사 미르의 도트 RPG! 마을 사람과 이야기하고, 칸 위에서 움직이며 싸우는 전략 전투로 사라진 종을 되찾아라.',
+    genre: 'RPG',
+    players: '1인 · 제1장',
+    song: 'town',
+    colors: ['#3a5ad0', '#ffd24a'],
+    controls: ['방향키 이동, Z / Enter 확인·말 걸기', 'X / Esc 메뉴·취소', '휴대폰은 화면 아래 A·B 버튼'],
+  },
+  {
     id: 'dino',
     title: '햄스터 다이노 파이트',
-    tagline: '햄스터 8마리의 공룡 변신 격투! 커맨드 기술로 싸우다 게이지가 차면 티라노·트리케라톱스·스테고사우루스로 변신!',
+    tagline: '햄스터 8마리의 공룡 변신 격투! 이어 치기와 커맨드 기술로 싸우고, 기를 모아 티라노·트리케라톱스·스테고사우루스로 변신!',
     genre: '격투',
     players: '1인 스토리 · 컴퓨터 대전 · 2인 대전',
     song: 'fight',
     colors: ['#ff9a5a', '#7fd8be'],
-    controls: ['1P: WASD 이동, J 펀치, K 킥, L 변신', '2P: 방향키 이동, 1 펀치, 2 킥, 3 변신', '↓↘→+펀치 등 커맨드 기술'],
+    controls: ['1P: WASD 이동, U·I 펀치, J·K 킥, L 기', '2P: 방향키 이동, 숫자패드 4·5 펀치, 1·2 킥, 3 기', '↓→+펀치 등 순서 입력 기술, 약→강 이어 치기'],
   },
   {
     id: 'maze',

@@ -683,3 +683,130 @@ h2 {
     height: 80px !important;
   }
 }
+
+/* ---- 주먹밥 용사전 ---- */
+.stage.pixel {
+  image-rendering: pixelated;
+}
+.quest-title {
+  display: grid;
+  gap: 14px;
+}
+.quest-title .row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.chapters {
+  margin: 0;
+  padding: 14px 18px 14px 40px;
+  background: rgba(10, 10, 30, 0.55);
+  border: 3px solid #fff;
+  border-radius: 6px;
+  display: grid;
+  gap: 6px;
+}
+.chapters span {
+  display: block;
+  font-size: 13px;
+  opacity: 0.8;
+}
+.chapters .soon {
+  opacity: 0.55;
+}
+.qmenu-wrap {
+  background: transparent;
+  justify-content: flex-end;
+  align-items: flex-end;
+  padding: 12px;
+}
+.qmenu,
+.quest-panel {
+  background: rgba(8, 8, 24, 0.94);
+  border: 4px solid #fff;
+  outline: 2px solid #7a7a9a;
+  outline-offset: -9px;
+  border-radius: 4px;
+  padding: 16px 18px;
+  font-family: 'DungGeunMo', 'Galmuri11', ui-monospace, monospace;
+}
+.qmenu {
+  display: grid;
+  gap: 2px;
+  min-width: 280px;
+  max-width: min(560px, 96%);
+  max-height: 92%;
+  overflow-y: auto;
+}
+.qmenu-title {
+  color: #ffd24a;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.qmenu button {
+  background: none;
+  border: none;
+  color: #fff;
+  text-align: left;
+  padding: 6px 4px;
+  font: inherit;
+  font-size: 17px;
+  box-shadow: none;
+  border-radius: 0;
+}
+.qmenu button.on {
+  color: #ffd24a;
+}
+.qmenu button:disabled {
+  color: #77778a;
+}
+.qnote {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: #c8d0ff;
+  line-height: 1.5;
+}
+.quest-panel {
+  overflow-y: auto;
+  justify-content: flex-start;
+  inset: 16px;
+}
+.quest-panel.end {
+  justify-content: center;
+  text-align: center;
+}
+.quest-panel .next span {
+  font-size: 14px;
+  opacity: 0.85;
+}
+.qstat {
+  width: min(640px, 100%);
+}
+.qstat h3 {
+  margin: 0 0 4px;
+  color: #ffd24a;
+}
+.qstat p {
+  margin: 2px 0;
+}
+.dim {
+  opacity: 0.7;
+  font-size: 14px;
+}
+.hint {
+  text-align: center;
+  opacity: 0.7;
+  font-size: 13px;
+}
+.quest-pad .pad-right {
+  align-items: center;
+}
+.quest-pad .special {
+  width: 64px;
+  height: 64px;
+  font-size: 22px;
+}
+.quest-pad .special.a {
+  background: linear-gradient(#ff8a6a, #d84a3a);
+}
+.art.pixel { image-rendering: pixelated; }

@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react';
 import { load } from '../core/storage';
 import { charById } from '../games/dino/chars';
 import { drawHamster, drawStage, idlePose } from '../games/dino/render';
+import { blit } from '../games/quest/pixel';
+import { personSprite, renderWorld } from '../games/quest/render';
+import { newWorld } from '../games/quest/world';
 import { GAMES, type GameInfo } from '../games/registry';
 import { SoundControls } from './common';
 
@@ -27,8 +30,39 @@ function DinoArt() {
   return <canvas ref={ref} width={960} height={528} className="art" />;
 }
 
+function QuestArt() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const t0 = performance.now();
+    const w = newWorld();
+    w.x = 12;
+    w.y = 8;
+    const draw = (now: number) => {
+      const ctx = ref.current?.getContext('2d');
+      if (!ctx) return;
+      const t = (now - t0) / 1000;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      renderWorld(ctx, w, { px: 10.5, py: 7, dir: 'down', trail: [] }, t);
+      const f = Math.floor(t * 3) % 2;
+      blit(ctx, personSprite('mir', 'down', 1 - f).cv, 560, 420, 6);
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, 960, 528);
+      ctx.globalAlpha = 1;
+      blit(ctx, personSprite('haru', 'down', f).cv, 420, 420, 6);
+      blit(ctx, personSprite('mir', 'down', 1 - f).cv, 560, 420, 6);
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <canvas ref={ref} width={960} height={528} className="art pixel" />;
+}
+
 function Art({ id }: { id: string }) {
   if (id === 'dino') return <DinoArt />;
+  if (id === 'quest') return <QuestArt />;
   return (
     <svg viewBox="0 0 200 110" className="art">
       <rect width="200" height="110" fill="#1a3a27" />
@@ -61,6 +95,7 @@ function Card({ g, onPlay }: { g: GameInfo; onPlay: () => void }) {
     g.id === 'maze'
       ? load<{ score: number }[]>('maze-scores', [])[0]?.score
       : (() => {
+          if (g.id === 'quest') return load<{ w?: { flags: Record<string, boolean> } } | null>('quest-v1', null)?.w?.flags.clear1 ? 1 : undefined;
           const r = load<{ clears?: Record<string, number> }>('dino-v1', {});
           const n = Object.keys(r.clears ?? {}).length;
           return n || undefined;
@@ -76,7 +111,7 @@ function Card({ g, onPlay }: { g: GameInfo; onPlay: () => void }) {
         <p>{g.tagline}</p>
         <small className="muted">
           {g.players}
-          {best !== undefined && (g.id === 'maze' ? ` · 최고 ${best.toLocaleString()}점` : ` · 스토리 클리어 ${best}마리`)}
+          {best !== undefined && (g.id === 'maze' ? ` · 최고 ${best.toLocaleString()}점` : g.id === 'quest' ? ' · 제1장 클리어' : ` · 스토리 클리어 ${best}마리`)}
         </small>
       </div>
       <span className="play">▶ 플레이</span>

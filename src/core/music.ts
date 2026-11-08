@@ -3,7 +3,7 @@
 import type { Rng } from './rng.ts';
 
 export type Inst = 'lead' | 'bass' | 'arp' | 'kick' | 'snare' | 'hat';
-export type SongId = 'lobby' | 'fight' | 'boss' | 'maze';
+export type SongId = 'lobby' | 'fight' | 'boss' | 'maze' | 'town' | 'field' | 'battle';
 
 export interface NoteEvent {
   beat: number;
@@ -107,6 +107,63 @@ export const SONGS: Record<SongId, Song> = {
     scale: [0, 2, 4, 7, 9],
     range: [67, 86],
   },
+  // 용사전 마을: 따뜻하고 느긋한 (G장조)
+  town: {
+    id: 'town',
+    name: '솔방울 마을',
+    bpm: 104,
+    swing: 0.12,
+    chords: [
+      { root: 43, tones: MAJ },
+      { root: 40, tones: MIN },
+      { root: 36, tones: MAJ },
+      { root: 38, tones: MAJ },
+      { root: 43, tones: MAJ },
+      { root: 47, tones: MIN },
+      { root: 36, tones: MAJ },
+      { root: 38, tones: [0, 4, 7, 10] },
+    ],
+    scale: [7, 9, 11, 2, 4],
+    range: [67, 86],
+  },
+  // 용사전 들판·숲: 씩씩한 모험 행진 (D장조)
+  field: {
+    id: 'field',
+    name: '바람 부는 언덕길',
+    bpm: 126,
+    swing: 0,
+    chords: [
+      { root: 38, tones: MAJ },
+      { root: 43, tones: MAJ },
+      { root: 45, tones: MAJ },
+      { root: 38, tones: MAJ },
+      { root: 35, tones: MIN },
+      { root: 43, tones: MAJ },
+      { root: 40, tones: MIN },
+      { root: 45, tones: [0, 4, 7, 10] },
+    ],
+    scale: [2, 4, 6, 9, 11],
+    range: [66, 86],
+  },
+  // 용사전 전투: 빠르고 신나는 (A단조)
+  battle: {
+    id: 'battle',
+    name: '칼 뽑아라!',
+    bpm: 158,
+    swing: 0,
+    chords: [
+      { root: 45, tones: MIN },
+      { root: 41, tones: MAJ },
+      { root: 43, tones: MAJ },
+      { root: 45, tones: MIN },
+      { root: 45, tones: MIN },
+      { root: 41, tones: MAJ },
+      { root: 38, tones: MIN },
+      { root: 40, tones: [0, 4, 7, 10] },
+    ],
+    scale: [9, 0, 2, 4, 7],
+    range: [64, 84],
+  },
 };
 
 const RHYTHMS: Record<SongId, number[][]> = {
@@ -124,6 +181,21 @@ const RHYTHMS: Record<SongId, number[][]> = {
     [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5],
     [0, 1, 1.5, 2, 3, 3.5],
     [0, 0.75, 1.5, 2.25, 3],
+  ],
+  town: [
+    [0, 1, 1.5, 2, 3],
+    [0, 0.5, 1, 2, 3],
+    [0, 1.5, 2, 2.5, 3.5],
+  ],
+  field: [
+    [0, 0.5, 1, 1.5, 2, 3],
+    [0, 1, 1.5, 2, 2.5, 3],
+    [0, 0.75, 1, 2, 3, 3.5],
+  ],
+  battle: [
+    [0, 0.5, 1, 1.5, 2, 2.5, 3],
+    [0, 0.75, 1.5, 2, 3, 3.5],
+    [0, 0.5, 1, 2, 2.5, 3, 3.5],
   ],
   maze: [
     [0, 0.5, 1, 2, 2.5, 3],
