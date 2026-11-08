@@ -424,7 +424,7 @@ export class DinoFight {
       if (f.t > TRANSFORM_TIME) this.set(f, 'idle');
     } else if (f.action === 'move') {
       // 연계 중 초필살기로 이어 쓰기
-      if (cmd === 'super' && f.slot !== 'super' && f.hitCount > 0 && this.tryCommand(f, o, 'super')) useCmd();
+      if (cmd === 'super' && f.slot !== 'super' && f.hitCount > 0 && this.tryCommand(f, 'super')) useCmd();
       else this.updateMove(f, o, dt);
     } else if (f.action in NORMALS) {
       const kind = f.action as Normal;
@@ -433,10 +433,10 @@ export class DinoFight {
       const air = kind === 'airkick' || kind === 'airpunch';
       // 맞히거나 막히면 다음 공격·기술로 끊고 이어 칠 수 있다
       if (f.hitDone && !air && control) {
-        if (cmd && cmd !== 'beast' && this.tryCommand(f, o, cmd)) {
+        if (cmd && cmd !== 'beast' && this.tryCommand(f, cmd)) {
           useCmd();
           useBtn();
-          return this.integrate(f, inp, dt);
+          return this.integrate(f, dt);
         }
         if (btn) {
           const next = normalFor(btn, true, inp.down);
@@ -447,7 +447,7 @@ export class DinoFight {
             if (light) f.chain++;
             this.set(f, next);
             this.events.push('swing');
-            return this.integrate(f, inp, dt);
+            return this.integrate(f, dt);
           }
         }
       }
@@ -458,8 +458,8 @@ export class DinoFight {
       if (wantBeast && ground) {
         f.bufCharge = 0;
         useCmd();
-        this.tryCommand(f, o, 'beast');
-      } else if (cmd && cmd !== 'beast' && this.tryCommand(f, o, cmd)) {
+        this.tryCommand(f, 'beast');
+      } else if (cmd && cmd !== 'beast' && this.tryCommand(f, cmd)) {
         useCmd();
         useBtn();
       } else if (btn) {
@@ -499,7 +499,7 @@ export class DinoFight {
     } else if (ground && f.action !== 'idle') {
       this.set(f, 'idle');
     }
-    this.integrate(f, inp, dt);
+    this.integrate(f, dt);
   }
 
   /** 변신이 터지는 순간: 가까운 상대를 밀어낸다 */
@@ -517,8 +517,7 @@ export class DinoFight {
     this.shake = 12;
   }
 
-  private integrate(f: Fighter, inp: Input, dt: number) {
-    void inp;
+  private integrate(f: Fighter, dt: number) {
     const c = f.char;
     const ground = this.grounded(f);
     const mv = this.move(f);
@@ -539,7 +538,7 @@ export class DinoFight {
   }
 
   /** 커맨드 기술 시작. 쓸 수 없으면 false */
-  tryCommand(f: Fighter, o: Fighter, cmd: Command): boolean {
+  tryCommand(f: Fighter, cmd: Command): boolean {
     if (cmd === 'beast') {
       if (f.beast || f.gauge < GAUGE_MAX || !this.grounded(f)) return false;
       f.beast = true;
