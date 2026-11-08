@@ -56,14 +56,13 @@ export class Sound {
   private waves = new Map<number, PeriodicWave>();
   track?: Track;
   private wanted: SongId | null = 'lobby';
-  private timer?: number;
   private listeners = new Set<() => void>();
   settings: Settings = load<Settings>('sound', { music: true, sfx: true, volume: 0.6 });
 
   unlock() {
     if (!this.ctx) {
       this.setup(new AudioContext());
-      this.timer = window.setInterval(() => this.schedule(), 150);
+      window.setInterval(() => this.schedule(), 150);
       this.play(this.wanted);
     }
     void (this.ctx as AudioContext).resume?.();
