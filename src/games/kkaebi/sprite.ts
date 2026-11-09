@@ -10,7 +10,6 @@ const hex = (c: string): RGB => {
   const n = parseInt(c.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
-const css = ([r, g, b]: RGB) => `rgb(${r | 0},${g | 0},${b | 0})`;
 const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 function hueShift([r, g, b]: RGB, deg: number): RGB {
   // 간단한 색상 회전 (YIQ)
