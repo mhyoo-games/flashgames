@@ -131,6 +131,11 @@ function rnd(seed: number) {
   };
 }
 
+/** 이미 뿔·뿔 같은 장식이 있는 계열 (단계 목록 또는 전부) */
+const NO_HORN: Record<number, number[] | true> = { 0: [2, 3], 6: [3], 9: [3], 11: [3], 14: [3], 17: true, 21: [1, 3], 25: [2, 3], 26: [3], 28: true, 32: true, 33: true, 34: [2, 3], 37: [1, 2], 44: [1, 3], 53: [2, 3], 58: [2, 3], 64: true, 65: true, 66: true, 12: [3], 22: [2, 3], 23: true, 36: [3], 46: [3], 56: [2, 3], 39: [3], 35: [2, 3], 38: [3], 16: [1, 3], 30: [3], 7: [3] };
+/** 얼굴에 무늬를 넣지 않는 계열 (얼굴이 작거나 가려진 것) */
+const NO_MARK = new Set([5, 6, 12, 17, 18, 21, 22, 23, 24, 25, 36, 37, 42, 43, 46, 47, 56, 59, 61, 63, 64, 65, 66]);
+
 export interface Face {
   ey: number;
   sep: number;
@@ -225,6 +230,8 @@ function palette(sp: Species, hue: number, back: boolean): Pal {
     21: mix(main, [20, 10, 30], 0.68),
     11: [150, 96, 50],
     12: [240, 196, 70],
+    22: [248, 232, 196],
+    23: [214, 52, 64],
     13: [255, 236, 150],
     15: mix(second, [255, 255, 255], 0.62),
     14: [88, 186, 64],
@@ -906,22 +913,52 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
   }
   if (legend) for (let i = 0; i < 6; i++) g.set(X(-18 + i * 7), Y(-40 + (i % 2) * 6), 9);
 
+  // ---------- 도깨비다움: 뿔 · 도깨비 무늬 ----------
+  {
+    const [qx, qy, qr] = head;
+    const noHorn = NO_HORN[sp.line];
+    if (!(noHorn === true || noHorn?.includes(st))) {
+      // 귀가 뾰족한 짐승은 가운데 외뿔, 나머지는 계열에 따라 외뿔·쌍뿔
+      const one = (kind && ['cat', 'tiger', 'dog', 'deer', 'rabbit', 'rodent'].includes(kind)) || sp.seed % 3 === 0;
+      const L = [3.2, 5.4, 8][st - 1] * (one ? 1.15 : 1);
+      const w = [1.6, 2.2, 2.9][st - 1];
+      const horn = (bx: number, lean: number) => {
+        const by = qy - qr * 0.9;
+        P([[bx - w, by + 1.6], [bx - w * 0.3 + lean * 0.5, by - L * 0.55], [bx + lean, by - L], [bx + w * 0.55 + lean * 0.4, by - L * 0.5], [bx + w, by + 1.6]], 22);
+        // 3단계는 뿔에 고리 무늬
+        if (final) Ln(bx - w * 0.7, by - L * 0.25, bx + w * 0.7, by - L * 0.3, 0.5, 16, 22);
+      };
+      if (one) horn(qx + qr * 0.08, 0.6);
+      else for (const k of [-1, 1]) horn(qx + k * qr * 0.42 - qr * 0.08, k * 1.2);
+    }
+    // 2단계부터 볼에 도깨비 무늬, 3단계는 이마에도
+    if (!back && st >= 2 && !NO_MARK.has(sp.line)) {
+      const ey = qy + qr * face.ey;
+      for (const k of [-1, 1]) {
+        const ex = qx + k * qr * face.sep - qr * face.shift + k * qr * 0.42;
+        for (let i = 0; i < 2; i++) Ln(ex - k * qr * 0.05, ey + qr * 0.42 + i * 1.6, ex + k * qr * 0.3, ey + qr * 0.3 + i * 1.6, 0.75, 23, 1);
+      }
+      if (final) P([[qx - qr * 0.05, qy - qr * 0.82], [qx - qr * 0.05 - 1.3, qy - qr * 0.62], [qx - qr * 0.05, qy - qr * 0.42], [qx - qr * 0.05 + 1.3, qy - qr * 0.62]], 23, 1);
+    }
+  }
+
   // ---------- 얼굴 ----------
   hx = head[0];
   hy = head[1];
   hr = head[2];
   if (!back) {
-    const eyeR = (st === 1 ? 3.6 : st === 2 ? 3.1 : 2.75) * (body === 'ghost' || body === 'blob' ? 1.15 : 1) * face.eyeK;
+    const eyeR = (st === 1 ? 3.5 : st === 2 ? 2.9 : 2.6) * (body === 'ghost' || body === 'blob' ? 1.15 : 1) * face.eyeK;
     const sep = hr * face.sep;
     const ey2 = hy + hr * face.ey;
-    const fierce = !face.calm && final && (has('dragon') || has('dark') || has('fight') || sp.base[1] > sp.base[3] + 10);
+    const fierce = !face.calm && final;
     const blink = frame === 2;
     const fish = body === 'fish';
     for (const k of fish ? [-1] : [-1, 1]) {
       const ex2 = fish ? hx - 0.5 : hx + k * sep - hr * face.shift;
       const far = k === 1;
       const rr = Math.max(2.4, eyeR * (far ? 0.9 : 1) * (s / RES) * RES * (fish ? 1.2 : 1));
-      const ry = rr * 1.22;
+      // 1단계 동글동글 → 2단계 갸름 → 3단계 날카롭게
+      const ry = rr * [1.22, 1.1, 1.02][st - 1];
       const cx = X(ex2);
       const cy = Y(ey2);
       if (blink) {
@@ -940,10 +977,12 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
           const d = (x * x) / (rr * rr) + (y * y) / (ry * ry);
           if (d > 1.18) continue;
           // 사나운 눈: 위쪽 안쪽을 비스듬히 깎는다
-          const lid = fierce ? -ry * 0.62 + -x * k * 0.75 : -99;
-          if (y < lid - 1.2) continue;
+          // 눈꼬리: 바깥쪽이 올라간 위 눈꺼풀 (단계가 오를수록 날카롭게)
+          const slant = fierce ? 0.6 : [0, 0.32, 0.5][st - 1];
+          const lid = slant ? -ry * (fierce ? 0.5 : 0.8) + x * k * -slant : -99;
+          if (y < lid - 1) continue;
           let v: number;
-          if (d > 0.78 || y < lid + 0.4) v = 6;
+          if (d > 0.78 || y < lid + 0.2) v = 6;
           else {
             const ix = x - lookX;
             const iy = y - ry * 0.08;
@@ -952,14 +991,14 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
             v = dp <= 1 ? 6 : di <= 1 ? (iy > ry * 0.18 ? 17 : 10) : 5;
           }
           // 위 눈꺼풀은 한 칸 더 굵게
-          if (!fierce && y < 0 && d > 0.62) v = 6;
+          if (y < 0 && d > 0.66) v = 6;
           g.set(cx + x, cy + y, v);
         }
       // 반짝임: 큰 것 하나 + 작은 것 하나
       g.ellipse(cx + lookX - rr * 0.28, cy - ry * 0.3, Math.max(0.9, rr * 0.24), Math.max(0.9, rr * 0.28), 9);
       g.set(cx + lookX + rr * 0.3, cy + ry * 0.32, 9);
       // 눈썹
-      if (fierce) g.line(cx + k * rr * 1.15, cy - ry * 1.25, cx - k * rr * 0.85, cy - ry * 0.55, 1.6 * RES, 6);
+      if (fierce) g.line(cx + k * rr * 1.25, cy - ry * 1.45, cx - k * rr * 0.9, cy - ry * 0.85, 1.3 * RES, 6);
     }
     // 볼
     if (st < 3 && face.blush && body !== 'rock' && body !== 'fish') {
