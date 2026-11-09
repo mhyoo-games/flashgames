@@ -13,7 +13,7 @@ import { canEvolve, canLearnTm, evolve, expAt, healMon, makeMon, maxHp, nameOf, 
 import { HMS, MOVES, TMS } from './moves';
 import { banner, box, dialog, H, renderBattle, renderField, text, W, wrapText, type BattleAnim, type FieldView } from './render';
 import { byNo, SPECIES, STARTERS } from './species';
-import { drawKkaebi, kkaebiSprite } from './sprite';
+import { drawKkaebi, kkaebiSprite, tinted } from './sprite';
 import { TYPE_COLOR } from './types';
 import { Dex, KEYS, Menu, PartyPick, Sprite, StatusView, TypeTag, useMenuKeys, type Opt } from './ui';
 import { addItem, hmUser, newGame, receive, TIME_NAME, timeOfDay, type Dir, type GameState, type NpcDef, type Step } from './world';
@@ -155,6 +155,7 @@ interface BattleRun {
   terrain: string;
   intro: number;
   leveled: Set<number>;
+  wild?: boolean;
 }
 
 const isSay = (q: Q): q is { say: string; who?: string } => 'say' in q;
@@ -176,6 +177,12 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
   const ban = useRef({ name: MAPS[s.map].name, t: 0 });
   const trans = useRef(0);
   const alert = useRef<{ npc: NpcDef; t: number } | null>(null);
+  /** 전투로 넘어가는 장면: 느낌표 → 번쩍 → 화면 덮기 */
+  const enc = useRef<{ t: number; style: Wipe; mark: boolean; go: () => void } | null>(null);
+  const beginEncounter = (style: Wipe, mark: boolean, go: () => void) => {
+    enc.current = { t: mark ? 0 : ENC_MARK, style, mark, go };
+    if (mark) sound.sfx('special');
+  };
   const [overlay, setOv] = useState<Overlay>(null);
   const ovRef = useRef<Overlay>(null);
   const [note, setNote] = useState('');
@@ -233,7 +240,10 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
           sound.sfx('catch');
         }
         dlg.current = { who: q.who ?? '', msg: josa(msg), shown: 0 };
-      } else if ('_trainer' in q) startTrainer(q._trainer);
+      } else if ('_trainer' in q) {
+        const n = q._trainer;
+        beginEncounter('bars', false, () => startTrainer(n));
+      }
       else if ('_after' in q) q._after();
       else if ('give' in q) addItem(s, q.give, q.n ?? 1);
       else if ('giveMon' in q) {
@@ -260,7 +270,10 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
       } else if ('tm' in q) {
         if (!s.tms.includes(q.tm)) s.tms.push(q.tm);
       } else if ('money' in q) s.money += q.money;
-      else if ('wild' in q) startWild(q.wild, q.lv, q.flag);
+      else if ('wild' in q) {
+        const w = q;
+        beginEncounter('legend', false, () => startWild(w.wild, w.lv, w.flag));
+      }
       else if ('warp' in q) [s.map, s.x, s.y] = q.warp;
       else if ('ending' in q) {
         doSave();
@@ -270,7 +283,7 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
   };
 
   // ---------------- 전투 시작 ----------------
-  const newAnim = (me?: Mon, foe?: Mon): BattleAnim => ({ php: me?.hp ?? 0, fhp: foe?.hp ?? 0, pin: 0, fin: 0, pshake: 0, fshake: 0, pflash: 0, fflash: 0, plunge: 0, flunge: 0, exp: me ? expFrac(me) : 0 });
+  const newAnim = (me?: Mon, foe?: Mon): BattleAnim => ({ php: me?.hp ?? 0, fhp: foe?.hp ?? 0, pin: 0, fin: 0, psend: 1, fsend: 1, pshake: 0, fshake: 0, pflash: 0, fflash: 0, plunge: 0, flunge: 0, exp: me ? expFrac(me) : 0 });
   const terrainOf = () => {
     const m = map();
     if (s.surfing) return 'sea';
@@ -282,8 +295,10 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
     if (!s.seen.includes(no)) s.seen.push(no);
     const fight = new Fight(s.party, [foe], rng);
     const me = fight.me;
-    battle.current = { fight, a: newAnim(me, foe), evq: [{ t: 'anim', side: 'f', kind: 'send' }, { t: 'msg', s: `앗! 야생의 ${sp(foe).name}${foe.shiny ? '(반짝!)' : ''}이(가) 나타났다!` }, { t: 'msg', s: `가랏! ${nameOf(me)}!` }, { t: 'anim', side: 'p', kind: 'send' }], msg: '', wait: 0, hold: false, phase: 'events', pIdx: fight.p, fIdx: 0, hpTarget: { p: me.hp, f: foe.hp }, legendFlag, terrain: terrainOf(), intro: 1, leveled: new Set() };
-    trans.current = 0.6;
+    battle.current = { fight, a: { ...newAnim(me, foe), fin: 1 }, evq: [{ t: 'msg', s: `앗! 야생의 ${sp(foe).name}${foe.shiny ? '(반짝!)' : ''}이(가) 나타났다!` }, { t: 'msg', s: `가랏! ${nameOf(me)}!` }, { t: 'anim', side: 'p', kind: 'send' }], msg: '', wait: 0, hold: false, phase: 'events', pIdx: fight.p, fIdx: 0, hpTarget: { p: me.hp, f: foe.hp }, legendFlag, terrain: terrainOf(), intro: 0, leveled: new Set(), wild: true };
+    battle.current.wait = 0.95;
+    trans.current = 0;
+    sound.sfx('start');
     sound.play(legendFlag ? 'boss' : 'kbattle');
     sound.sfx('start');
   };
@@ -312,7 +327,8 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
       intro: 0,
       leveled: new Set(),
     };
-    trans.current = 0.6;
+    battle.current.wait = 0.7;
+    trans.current = 0;
     sound.play(big ? 'boss' : 'ktrainer');
     sound.sfx('start');
   };
@@ -457,20 +473,42 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
         if (!s.seen.includes(m.no)) s.seen.push(m.no);
         if (!s.caught.includes(m.no)) s.caught.push(m.no);
         sound.sfx('clear');
-        queue.current.unshift({ who: '', say: `축하합니다! ${before}은(는) ${sp(m).name}(으)로 진화했다!` });
+        dlg.current = { who: '', msg: josa(`축하합니다! ${before}은(는) ${sp(m).name}(으)로 진화했다!`), shown: 0 };
       }
       if (ctx) drawEvo(ctx, ev, time.current);
-      if (ev.done && ev.t > 5 && (ok || ev.t > 9)) {
+      let close = false;
+      if (dlg.current && ctx) {
+        dlg.current.shown += dt * 45;
+        if (ok && dlg.current.shown >= dlg.current.msg.length) {
+          dlg.current = null;
+          close = true;
+        } else if (ok) dlg.current.shown = dlg.current.msg.length;
+      }
+      if (ev.done && ev.t > 5 && !dlg.current && (close || ok || ev.t > 12)) {
         if (ev.cancelled) queue.current.unshift({ who: '', say: '어라…? 진화가 멈췄다.' });
         evo.current = null;
         sound.play(MAPS[s.map].song as SongId);
         startEvo();
         runQueue();
-      } else if (ev.done && ev.t > 4.6 && dlg.current === null && queue.current.length) runQueue();
-      if (dlg.current && ctx) {
-        dlg.current.shown += dt * 45;
-        dialog(ctx, dlg.current.who, dlg.current.msg, dlg.current.shown, time.current);
-        if (ok && dlg.current.shown >= dlg.current.msg.length) dlg.current = null;
+      }
+      if (dlg.current && ctx) dialog(ctx, dlg.current.who, dlg.current.msg, dlg.current.shown, time.current);
+      return;
+    }
+
+    // ---- 전투로 넘어가는 중 ----
+    const en = enc.current;
+    if (en) {
+      en.t += dt;
+      const v = view.current;
+      v.alertMe = en.mark && en.t < ENC_MARK ? en.t : undefined;
+      if (ctx) {
+        renderField(ctx, s, map(), v, time.current, s.forceTime ?? timeOfDay());
+        encounterFx(ctx, en.style, en.t);
+      }
+      if (en.t >= ENC_END) {
+        enc.current = null;
+        v.alertMe = undefined;
+        en.go();
       }
       return;
     }
@@ -483,7 +521,15 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
         const f = r.fight;
         const me = f.party[r.pIdx];
         const foe = f.foes[r.fIdx];
-        renderBattle(ctx, me, foe, r.a, r.terrain, time.current, r.trainer ? (r.trainer.look as string) : undefined, r.intro);
+        renderBattle(ctx, me, foe, r.a, r.terrain, time.current, r.trainer ? (r.trainer.look as string) : undefined, r.intro, r.wild);
+        // 덮였던 화면이 가운데부터 위아래로 열린다
+        if (r.intro < 0.4) {
+          const k = 1 - r.intro / 0.4;
+          const hh = (H / 2) * k * k;
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, W, hh);
+          ctx.fillRect(0, H - hh, W, hh);
+        }
         box(ctx, 16, H - 112, W - 32, 100);
         if (r.msg) wrapText(ctx, r.msg, 44, H - 90, W - 120, 30, 22, 2);
         if (r.hold && r.msg && Math.floor(time.current * 3) % 2) text(ctx, '▼', W - 64, H - 46, 20);
@@ -561,7 +607,10 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
                 if (res.trainer) {
                   alert.current = { npc: res.trainer, t: 0 };
                   sound.sfx('special');
-                } else if (res.encounter) startWild(res.encounter.no, res.encounter.lv);
+                } else if (res.encounter) {
+                  const e = res.encounter;
+                  beginEncounter('swirl', true, () => startWild(e.no, e.lv));
+                }
               },
             };
           }
@@ -624,7 +673,11 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
   // ---------------- 전투 진행 ----------------
   const updateBattle = (r: BattleRun, dt: number, ok: boolean) => {
     const a = r.a;
-    r.intro = Math.min(1, r.intro + dt * 1.5);
+    const before = r.intro;
+    r.intro = Math.min(1.6, r.intro + dt * 1.25);
+    if (r.wild && before < 1 && r.intro >= 1) sound.sfx('power');
+    a.psend = Math.min(1, a.psend + dt * 2.2);
+    a.fsend = Math.min(1, a.fsend + dt * 2.2);
     const f = r.fight;
     const me = f.party[r.pIdx];
     const foe = f.foes[r.fIdx];
@@ -702,9 +755,14 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
         const side = e.side;
         switch (e.kind) {
           case 'send':
-            if (side === 'p') a.pin = 1;
-            else a.fin = 1;
-            sound.sfx('start');
+            if (side === 'p') {
+              a.pin = 1;
+              a.psend = 0;
+            } else {
+              a.fin = 1;
+              a.fsend = 0;
+            }
+            sound.sfx('burst');
             r.wait = 0.45;
             break;
           case 'recall':
@@ -1130,6 +1188,57 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
   }
 }
 
+type Wipe = 'swirl' | 'bars' | 'legend';
+/** 느낌표가 떠 있는 시간 · 번쩍임이 끝나는 때 · 덮기가 끝나는 때 */
+const ENC_MARK = 0.5;
+const ENC_FLASH = 0.78;
+const ENC_END = 1.42;
+
+function encounterFx(ctx: CanvasRenderingContext2D, style: Wipe, t: number) {
+  // 두 번 번쩍
+  if (t >= ENC_MARK && t < ENC_FLASH) {
+    const k = (t - ENC_MARK) / (ENC_FLASH - ENC_MARK);
+    const a = Math.max(0, Math.sin(k * Math.PI * 2)) * 0.85;
+    ctx.fillStyle = style === 'legend' ? `rgba(255,240,180,${a})` : `rgba(255,255,255,${a})`;
+    ctx.fillRect(0, 0, W, H);
+    // 반전처럼 어둡게
+    if (Math.sin(k * Math.PI * 2) < 0) {
+      ctx.fillStyle = `rgba(0,0,30,${-Math.sin(k * Math.PI * 2) * 0.55})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+  if (t < ENC_FLASH) return;
+  const k = Math.min(1, (t - ENC_FLASH) / (ENC_END - ENC_FLASH - 0.06));
+  ctx.fillStyle = '#000';
+  const S = 32;
+  if (style === 'bars') {
+    // 줄무늬가 번갈아 좌우에서 밀려 들어온다
+    for (let i = 0; i * S < H; i++) {
+      const d = Math.min(1, Math.max(0, k * 1.5 - (i % 4) * 0.12));
+      const w = W * d * d * (3 - 2 * d);
+      if (i % 2) ctx.fillRect(W - w, i * S, w, S);
+      else ctx.fillRect(0, i * S, w, S);
+    }
+    return;
+  }
+  // 소용돌이: 바깥에서 안쪽으로 빙글빙글 칸이 채워진다
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = Math.hypot(cx, cy);
+  for (let y = 0; y < H; y += S)
+    for (let x = 0; x < W; x += S) {
+      const dx = x + S / 2 - cx;
+      const dy = y + S / 2 - cy;
+      const ang = (Math.atan2(dy, dx) + Math.PI) / (Math.PI * 2);
+      const rr = Math.hypot(dx, dy) / R;
+      const order = style === 'legend' ? 1 - rr : (1 - rr) * 0.55 + ((ang + rr * 1.5) % 1) * 0.45;
+      const d = Math.min(1, Math.max(0, (k * 1.18 - order) / 0.18));
+      if (d <= 0) continue;
+      const sz = S * d;
+      ctx.fillRect(x + (S - sz) / 2, y + (S - sz) / 2, Math.ceil(sz), Math.ceil(sz));
+    }
+}
+
 function stripes(ctx: CanvasRenderingContext2D, t: number) {
   const k = Math.min(1, t / 0.4);
   ctx.fillStyle = '#000';
@@ -1137,30 +1246,86 @@ function stripes(ctx: CanvasRenderingContext2D, t: number) {
 }
 
 function drawEvo(ctx: CanvasRenderingContext2D, ev: { from: number; to: number; t: number; done?: boolean; cancelled?: boolean }, time: number) {
-  ctx.fillStyle = '#101020';
-  ctx.fillRect(0, 0, W, H);
   const t = ev.t;
-  // 빛이 번갈아 깜빡이며 점점 빨라진다
-  const speed = 2 + t * 3;
-  const showNew = ev.done ? !ev.cancelled : t > 1 && Math.sin(t * speed) > 0;
-  const no = showNew ? ev.to : ev.from;
-  const cv = kkaebiSprite(byNo(no));
-  if (!ev.done && t > 1) {
-    const g = ctx.createRadialGradient(W / 2, H / 2 - 40, 10, W / 2, H / 2 - 40, 260);
-    g.addColorStop(0, 'rgba(255,255,220,0.6)');
-    g.addColorStop(1, 'rgba(255,255,220,0)');
+  const cx = W / 2;
+  const cy = H / 2 - 40;
+  const glowing = !ev.done && t > 1;
+  // 배경: 어두워졌다가 빛줄기가 돈다
+  ctx.fillStyle = '#0c0c1c';
+  ctx.fillRect(0, 0, W, H);
+  const power = ev.done ? Math.max(0, 1 - (t - 4.5) * 0.8) : Math.min(1, Math.max(0, (t - 0.6) / 3));
+  if (power > 0) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(time * 0.6);
+    for (let i = 0; i < 16; i++) {
+      ctx.rotate((Math.PI * 2) / 16);
+      ctx.fillStyle = i % 2 ? `rgba(120,160,255,${0.16 * power})` : `rgba(255,240,170,${0.22 * power})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(700, -60);
+      ctx.lineTo(700, 60);
+      ctx.fill();
+    }
+    ctx.restore();
+    const g = ctx.createRadialGradient(cx, cy, 10, cx, cy, 300);
+    g.addColorStop(0, `rgba(255,255,230,${0.7 * power})`);
+    g.addColorStop(1, 'rgba(255,255,230,0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
   }
-  drawKkaebi(ctx, cv, W / 2, H / 2 + 80, 6);
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2 + time * 2;
-    const d = 200 - ((t * 60 + i * 20) % 200);
-    ctx.fillStyle = '#fff6b0';
-    ctx.fillRect(W / 2 + Math.cos(a) * d - 3, H / 2 - 40 + Math.sin(a) * d - 3, 6, 6);
+  const a = byNo(ev.from);
+  const b = byNo(ev.to);
+  if (glowing) {
+    // 하얗게 빛나는 몸이 옛 모습과 새 모습 사이를 점점 빨리 오간다
+    const speed = 1.6 + (t - 1) ** 2 * 1.4;
+    const w = Math.sin((t - 1) * speed * Math.PI);
+    const k = (w + 1) / 2;
+    const sa = 6 * (1 - k * 0.35);
+    const sb = 6 * (0.65 + k * 0.35);
+    drawKkaebi(ctx, tinted(w > 0 ? b : a, '#ffffff'), cx, H / 2 + 80, w > 0 ? sb : sa);
+    if (t < 1.4) {
+      ctx.globalAlpha = 1 - (t - 1) / 0.4;
+      drawKkaebi(ctx, kkaebiSprite(a), cx, H / 2 + 80, 6);
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    const show = ev.done && !ev.cancelled ? b : a;
+    const bounce = ev.done && !ev.cancelled ? Math.max(0, 1 - (t - 4.5) * 2) * Math.abs(Math.sin((t - 4.5) * 12)) * 0.12 : 0;
+    drawKkaebi(ctx, kkaebiSprite(show, false, Math.floor(time * 1.6) % 2), cx, H / 2 + 80, 6, false, 1 - bounce);
+  }
+  // 빛 알갱이: 진화 중엔 빨려 들어가고, 끝나면 터져 나온다
+  if (glowing) {
+    for (let i = 0; i < 24; i++) {
+      const ang = (i / 24) * Math.PI * 2 + time * 1.5;
+      const d = 320 - ((t * 110 + i * 37) % 320);
+      ctx.fillStyle = i % 3 ? '#fff6b0' : '#a8c8ff';
+      const sz = 3 + (d / 320) * 5;
+      ctx.fillRect(cx + Math.cos(ang) * d - sz / 2, cy + Math.sin(ang) * d * 0.8 - sz / 2, sz, sz);
+    }
+  }
+  if (ev.done && !ev.cancelled && t < 6.5) {
+    const k = (t - 4.5) / 2;
+    for (let i = 0; i < 30; i++) {
+      const ang = (i / 30) * Math.PI * 2;
+      const d = 40 + k * (260 + (i % 5) * 30);
+      const x = cx + Math.cos(ang) * d;
+      const y = cy + Math.sin(ang) * d * 0.8 + k * k * 120;
+      ctx.globalAlpha = Math.max(0, 1 - k);
+      ctx.fillStyle = ['#fff6b0', '#ffb0d0', '#b0e0ff', '#c8ffb0'][i % 4];
+      const sz = 10 * (1 - k) + 3;
+      ctx.fillRect(x - sz / 2, y - 1.5, sz, 3);
+      ctx.fillRect(x - 1.5, y - sz / 2, 3, sz);
+    }
+    ctx.globalAlpha = 1;
+  }
+  // 바뀌는 순간 하얗게 번쩍
+  if (ev.done && t < 5.3) {
+    ctx.fillStyle = `rgba(255,255,255,${Math.max(0, 1 - (t - 4.5) / 0.8)})`;
+    ctx.fillRect(0, 0, W, H);
   }
   box(ctx, 16, H - 112, W - 32, 100);
-  text(ctx, ev.done ? (ev.cancelled ? '진화가 멈췄다.' : '') : t < 1 ? `어라…? ${byNo(ev.from).name}의 모습이……!` : 'B 버튼(X)을 누르면 진화를 멈출 수 있다', 44, H - 84, 22);
+  text(ctx, ev.done ? (ev.cancelled ? '진화가 멈췄다.' : '') : t < 1 ? `어라…? ${a.name}의 모습이……!` : 'B 버튼(X)을 누르면 진화를 멈출 수 있다', 44, H - 84, 22);
 }
 
 // ---------------- 가방 ----------------

@@ -4,8 +4,8 @@ import { tile as tileAt, npcsOf, itemFlag } from './field.ts';
 import { LOOKS } from './maps.ts';
 import { maxHp, nameOf, sp, type Mon } from './mon.ts';
 import { MOVES, STATUS_NAME } from './moves.ts';
-import { byNo } from './species.ts';
-import { drawKkaebi, kkaebiSprite } from './sprite.ts';
+import { byNo, type Species } from './species.ts';
+import { drawKkaebi, kkaebiSprite, silhouette, tinted } from './sprite.ts';
 import { TYPE_COLOR, type Type } from './types.ts';
 import type { Dir, GameState, MapDef, TimeOfDay } from './world.ts';
 
@@ -385,6 +385,28 @@ export interface FieldView {
   hop: number;
   /** 트레이너 머리 위 느낌표 */
   alert?: string;
+  /** 주인공 머리 위 느낌표 (뜬 지 몇 초) */
+  alertMe?: number;
+}
+
+/** 말풍선 느낌표: 톡 튀어 오른다 */
+function alertMark(ctx: Ctx, x: number, y: number, t: number) {
+  const k = Math.min(1, t / 0.16);
+  const s = k < 1 ? k * 1.35 : 1 + Math.max(0, 0.35 - (t - 0.16) * 3) * Math.sin((t - 0.16) * 30) * 0.4;
+  const lift = (1 - k) * 10;
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y - lift));
+  ctx.scale(s, s);
+  ctx.fillStyle = '#202030';
+  ctx.fillRect(-15, -17, 30, 32);
+  ctx.fillRect(-4, 15, 8, 4);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-13, -15, 26, 28);
+  ctx.fillRect(-2, 13, 4, 4);
+  ctx.fillStyle = '#e83838';
+  ctx.fillRect(-3, -11, 6, 14);
+  ctx.fillRect(-3, 6, 6, 5);
+  ctx.restore();
 }
 
 export function renderField(ctx: Ctx, s: GameState, m: MapDef, v: FieldView, time: number, tod: TimeOfDay) {
@@ -441,10 +463,7 @@ export function renderField(ctx: Ctx, s: GameState, m: MapDef, v: FieldView, tim
         shadow(ctx, sx, sy);
         const { cv, flip } = personCv(n.look, dir, n.look === 'gourd' ? 0 : frame);
         blit(ctx, cv, sx, sy, n.look === 'gourd' ? 2 : 3, flip);
-        if (v.alert === n.id) {
-          box(ctx, sx - 14, sy - 86, 28, 30);
-          text(ctx, '!', sx, sy - 82, 24, '#e83838', 'center');
-        }
+        if (v.alert === n.id) alertMark(ctx, sx, sy - 78, time % 10);
       },
     });
   }
@@ -464,8 +483,35 @@ export function renderField(ctx: Ctx, s: GameState, m: MapDef, v: FieldView, tim
         ctx.ellipse(hx - 4, hy - 11, 15, 6, 0, 0, Math.PI * 2);
         ctx.fill();
       } else shadow(ctx, hx, hy + v.hop);
-      const { cv, flip } = personCv('hero', v.dir, v.moving ? frame : 0);
-      blit(ctx, cv, hx, hy - (s.surfing ? 10 : 0), 3, flip);
+      // 한 칸 걷는 동안 가운데쯤에서 발을 내딛고 살짝 들썩인다
+      const frac = Math.abs((v.px % 1) + (v.py % 1)) % 1;
+      const stepping = frac > 0.2 && frac < 0.8;
+      const stepFrame = stepping ? 1 : 0;
+      const bobY = stepping && !s.surfing ? 2 : 0;
+      const { cv, flip } = personCv('hero', v.dir, v.moving || stepping ? stepFrame : 0);
+      blit(ctx, cv, hx, hy - (s.surfing ? 10 + Math.sin(time * 3) * 2 : 0) - bobY, 3, flip);
+      // 풀숲 안: 발목이 풀에 가려지고, 걸으면 잎이 흩날린다
+      const gx = Math.round(v.px);
+      const gy = Math.round(v.py);
+      if (!s.surfing && tileAt(m, gx, gy) === '"') {
+        const sway = Math.floor(time * 2.5 + gx * 0.7) % 2;
+        for (const [ox, h] of [[-16, 12], [-9, 16], [-2, 13], [5, 16], [12, 12]] as [number, number][]) {
+          ctx.fillStyle = m.terrain === 'forest' ? '#40883a' : '#50a848';
+          ctx.fillRect(hx + ox + sway, hy - h + 2, 4, h);
+          ctx.fillStyle = m.terrain === 'forest' ? '#286828' : '#388838';
+          ctx.fillRect(hx + ox + 4 + sway, hy - h + 5, 2, h - 3);
+        }
+        if (stepping) {
+          for (let i = 0; i < 4; i++) {
+            const k = (frac - 0.2) / 0.6;
+            const lx = hx - 18 + i * 12 + Math.sin(i * 2.1 + k * 4) * 6;
+            const ly = hy - 10 - k * (18 + i * 5);
+            ctx.fillStyle = i % 2 ? '#78c858' : '#3a8a30';
+            ctx.fillRect(Math.round(lx), Math.round(ly), 5, 3);
+          }
+        }
+      }
+      if (v.alertMe !== undefined) alertMark(ctx, hx, hy - 78 - (s.surfing ? 10 : 0), v.alertMe);
     },
   });
   list.sort((a, b) => a.y - b.y).forEach((p) => p.draw());
@@ -540,6 +586,9 @@ export interface BattleAnim {
   /** 내 깨비·상대 깨비 보임 정도 (0~1, 등장·퇴장) */
   pin: number;
   fin: number;
+  /** 호리병에서 나온 지 (0 → 1, 톡 튀어나오기) */
+  psend: number;
+  fsend: number;
   /** 흔들림·깜빡임 */
   pshake: number;
   fshake: number;
@@ -557,12 +606,49 @@ export interface BattleAnim {
   exp: number;
 }
 
+const easeOut = (t: number) => 1 - (1 - t) ** 3;
+/** 톡 튀어나오는 크기: 작게 → 조금 크게 → 제 크기 */
+function popScale(t: number) {
+  if (t >= 1) return 1;
+  const c = 2.2;
+  const u = t - 1;
+  return Math.max(0.05, 1 + (c + 1) * u * u * u + c * u * u);
+}
+/** 숨쉬기·깜빡임 */
+const frameAt = (time: number, off: number) => ((time + off) % 3.4 < 0.13 ? 2 : Math.floor((time + off) * 1.6) % 2);
+function whiteOver(ctx: Ctx, s: Species, x: number, y: number, scale: number, alpha: number, squash: number, back = false) {
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  drawKkaebi(ctx, tinted(s, '#ffffff', back), x, y, scale, false, squash);
+  ctx.restore();
+}
+/** 호리병에서 나올 때 퍼지는 빛 조각 */
+function burst(ctx: Ctx, x: number, y: number, t: number) {
+  const k = t / 0.7;
+  ctx.save();
+  ctx.globalAlpha = 1 - k;
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + 0.3;
+    const r = 20 + k * 110;
+    const px = x + Math.cos(a) * r;
+    const py = y + Math.sin(a) * r * 0.75;
+    ctx.fillStyle = i % 2 ? '#fff6b0' : '#ffffff';
+    const sz = 10 * (1 - k) + 3;
+    ctx.fillRect(Math.round(px - sz / 2), Math.round(py - 1), Math.round(sz), 3);
+    ctx.fillRect(Math.round(px - 1), Math.round(py - sz / 2), 3, Math.round(sz));
+  }
+  ctx.restore();
+}
+
 const PX = 220;
 const PY = 404;
 const FX = 700;
 const FY = 230;
 
-export function renderBattle(ctx: Ctx, me: Mon | undefined, foe: Mon, a: BattleAnim, terrain: string, time: number, trainerLook?: string, introT = 1) {
+export function renderBattle(ctx: Ctx, me: Mon | undefined, foe: Mon, a: BattleAnim, terrain: string, time: number, trainerLook?: string, introT = 1, wild = false) {
+  const slide = easeOut(Math.min(1, introT));
+  const fOff = -(1 - slide) * W * 0.85;
+  const pOff = (1 - slide) * W * 0.85;
   ctx.imageSmoothingEnabled = false;
   // 배경
   const sky: Record<string, [string, string]> = { cave: ['#382838', '#5a4858'], forest: ['#3a7848', '#88c070'], snow: ['#c8d8f0', '#f0f4ff'], sand: ['#f8d890', '#f8f0c8'], indoor: ['#d8c8a8', '#f0e8d0'], tower: ['#584878', '#a898c8'], sea: ['#58a0f0', '#a8d8ff'] };
@@ -574,7 +660,7 @@ export function renderBattle(ctx: Ctx, me: Mon | undefined, foe: Mon, a: BattleA
   ctx.fillRect(0, 0, W, H);
   // 바닥 발판
   const plat = terrain === 'cave' ? '#7a6858' : terrain === 'snow' ? '#e0e8f8' : terrain === 'sea' ? '#68a8f0' : terrain === 'sand' ? '#e8c880' : '#88c868';
-  for (const [x, y, rx] of [[FX, FY + 6, 150], [PX + 10, PY + 18, 190]] as [number, number, number][]) {
+  for (const [x, y, rx] of [[FX + fOff, FY + 6, 150], [PX + 10 + pOff, PY + 18, 190]] as [number, number, number][]) {
     ctx.fillStyle = plat;
     ctx.beginPath();
     ctx.ellipse(x, y, rx, rx * 0.22, 0, 0, Math.PI * 2);
@@ -585,10 +671,9 @@ export function renderBattle(ctx: Ctx, me: Mon | undefined, foe: Mon, a: BattleA
     ctx.fill();
   }
   // 등장 전 트레이너 그림
-  const slide = Math.min(1, introT);
   if (trainerLook && a.fin < 1) {
     const { cv } = personCv(trainerLook, 'down', 0);
-    blit(ctx, cv, FX + (1 - slide) * 300 + a.fin * 260, FY + 4, 7);
+    blit(ctx, cv, FX + fOff + a.fin * 260, FY + 4, 7);
   }
   // 상대 깨비
   if (a.fin > 0 && foe.hp >= 0) {
@@ -596,8 +681,18 @@ export function renderBattle(ctx: Ctx, me: Mon | undefined, foe: Mon, a: BattleA
     const sh = a.fshake > 0 ? Math.sin(a.fshake * 60) * 8 : 0;
     const vis = !(a.fflash > 0 && Math.floor(a.fflash * 18) % 2 === 0);
     const lunge = Math.sin(Math.min(1, a.flunge) * Math.PI) * -40;
-    const scale = 4.2 * (a.ball && !a.ball.done ? 0 : a.fin);
-    if (vis && scale > 0 && !(a.ball && a.ball.t > 0.4 && !a.ball.done)) drawKkaebi(ctx, kkaebiSprite(s, false, Math.floor(time * 2) % 2, foe.shiny), FX + sh + lunge, FY + 10 + (1 - a.fin) * 0, scale);
+    const pop = popScale(a.fsend);
+    const scale = 4.2 * (a.ball && !a.ball.done ? 0 : a.fin) * pop;
+    const bob = Math.sin(time * 2.6) * 0.025;
+    if (vis && scale > 0 && !(a.ball && a.ball.t > 0.4 && !a.ball.done)) {
+      const x = FX + sh + lunge + fOff;
+      // 야생: 미끄러져 들어오는 동안은 그림자, 멈추면 번쩍하며 색이 돌아온다
+      const cv = wild && introT < 1 ? silhouette(s) : kkaebiSprite(s, false, frameAt(time, 0.3), foe.shiny);
+      drawKkaebi(ctx, cv, x, FY + 10, scale, false, 1 + bob);
+      const glow = wild ? Math.max(0, 1 - Math.abs(introT - 1.05) / 0.12) * (introT >= 1 ? 1 : 0) : 0;
+      if (glow > 0 || a.fsend < 0.5) whiteOver(ctx, s, x, FY + 10, scale, Math.max(glow, 1 - a.fsend * 2), 1 + bob);
+      if (a.fsend < 0.7) burst(ctx, x, FY - 60, a.fsend);
+    }
   }
   // 내 깨비 (뒷모습)
   if (me && a.pin > 0) {
@@ -605,7 +700,13 @@ export function renderBattle(ctx: Ctx, me: Mon | undefined, foe: Mon, a: BattleA
     const sh = a.pshake > 0 ? Math.sin(a.pshake * 60) * 8 : 0;
     const vis = !(a.pflash > 0 && Math.floor(a.pflash * 18) % 2 === 0);
     const lunge = Math.sin(Math.min(1, a.plunge) * Math.PI) * 40;
-    if (vis) drawKkaebi(ctx, kkaebiSprite(s, true, Math.floor(time * 2) % 2, me.shiny), PX + sh + lunge, PY + 28 + (1 - a.pin) * 120, 5.4 * Math.max(0.2, a.pin));
+    const sc = 5.4 * Math.max(0.2, a.pin) * popScale(a.psend);
+    const bob = Math.sin(time * 2.6 + 1.7) * 0.022;
+    const x = PX + sh + lunge + pOff;
+    const y = PY + 28 + (1 - a.pin) * 120;
+    if (vis) drawKkaebi(ctx, kkaebiSprite(s, true, frameAt(time, 1.1), me.shiny), x, y, sc, false, 1 + bob);
+    if (vis && a.psend < 0.5) whiteOver(ctx, s, x, y, sc, 1 - a.psend * 2, 1 + bob, true);
+    if (a.psend < 0.7) burst(ctx, x, y - 120, a.psend);
   }
   // 호리병
   if (a.ball) {
@@ -639,7 +740,7 @@ export function renderBattle(ctx: Ctx, me: Mon | undefined, foe: Mon, a: BattleA
     }
   }
   // 상태 창
-  hud(ctx, foe, 40, 30, a.fhp, false, 0, a.fin > 0);
+  if (introT >= 1) hud(ctx, foe, 40 - Math.max(0, 1.2 - introT) * 2000, 30, a.fhp, false, 0, a.fin > 0);
   if (me) hud(ctx, me, W - 430, 300, a.php, true, a.exp, a.pin > 0);
 }
 

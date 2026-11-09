@@ -179,3 +179,18 @@ test('조사: 받침에 따라 을/를, 이/가, 은/는, (으)로', async () =>
   assert.equal(josa('달토끼(으)로'), '달토끼로');
   assert.equal(josa('용발톱(으)로'), '용발톱으로');
 });
+
+test('생김새: 계열마다 특징이 있고, 3단계는 더 화려하다', async () => {
+  const { SIGS, sigFor } = await import('../src/games/kkaebi/sigs.ts');
+  const lines = new Set(SPECIES.map((s) => s.line));
+  assert.equal(SIGS.length, lines.size);
+  const seen = new Set<string>();
+  for (const s of SPECIES.filter((x) => x.stage === 3 && !x.legend)) {
+    const a = sigFor(s.line, 1);
+    const c = sigFor(s.line, 3);
+    assert.ok(Object.keys(c).length > Object.keys(a).length, `${s.name}: 3단계 특징이 늘지 않음`);
+    seen.add(JSON.stringify(c));
+  }
+  // 최종 진화형끼리 특징 조합이 겹치지 않는다
+  assert.equal(seen.size, SPECIES.filter((x) => x.stage === 3 && !x.legend).length);
+});
