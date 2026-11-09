@@ -24,6 +24,8 @@ export const KEYS: Record<string, string> = {
   Backspace: 'cancel',
   ShiftLeft: 'run',
   ShiftRight: 'run',
+  KeyC: 'speed',
+  Tab: 'speed',
 };
 
 /** 메뉴 키 처리 (열려 있는 동안 게임보다 먼저 받는다) */
@@ -33,7 +35,7 @@ export function useMenuKeys(handler: (k: string) => void) {
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       const k = KEYS[e.code];
-      if (!k || k === 'run') return;
+      if (!k || k === 'run' || k === 'speed') return;
       e.preventDefault();
       e.stopPropagation();
       ref.current(k);

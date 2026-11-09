@@ -86,10 +86,10 @@ function Title({ hasSave, onNew, onLoad, saved }: { hasSave: boolean; onNew: (na
       ctx.restore();
       show.forEach((no, i) => {
         const a = (i / show.length) * Math.PI * 2 + t * 0.4;
-        drawKkaebi(ctx, kkaebiSprite(byNo(no), false, Math.floor(t * 2 + i) % 2), W / 2 + Math.cos(a) * 360, 330 + Math.sin(a) * 90, 2.6);
+        drawKkaebi(ctx, kkaebiSprite(byNo(no), false, Math.floor(t * 2 + i) % 2), W / 2 + Math.cos(a) * 370, 390 + Math.sin(a) * 70, 2.6);
       });
-      text(ctx, '깨비 도감', W / 2, 46, 72, '#5a2a08', 'center', true);
-      text(ctx, '~ 금빛 호리병 ~', W / 2, 130, 30, '#a04818', 'center');
+      text(ctx, '깨비 도감', W / 2, 40 + Math.sin(t * 1.5) * 3, 72, '#fff0a0', 'center', true);
+      text(ctx, '~ 금빛 호리병 ~', W / 2, 128, 36, '#ffffff', 'center', true);
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
@@ -178,6 +178,19 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
   const trans = useRef(0);
   const alert = useRef<{ npc: NpcDef; t: number } | null>(null);
   /** 전투로 넘어가는 장면: 느낌표 → 번쩍 → 화면 덮기 */
+  /** 전투 배속: 1·2·3 (C 또는 Tab으로 바꾸고, 전투 중 Shift를 누르고 있으면 3배) */
+  const speed = useRef(loadSpeed());
+  const [, setSpeedShown] = useState(speed.current);
+  const cycleSpeed = () => {
+    speed.current = speed.current >= 3 ? 1 : speed.current + 1;
+    try {
+      localStorage.setItem(SPEED_KEY, String(speed.current));
+    } catch {
+      /* 저장 안 돼도 괜찮다 */
+    }
+    setSpeedShown(speed.current);
+    sound.sfx('click');
+  };
   const enc = useRef<{ t: number; style: Wipe; mark: boolean; go: () => void } | null>(null);
   const beginEncounter = (style: Wipe, mark: boolean, go: () => void) => {
     enc.current = { t: mark ? 0 : ENC_MARK, style, mark, go };
@@ -453,6 +466,7 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
     const cancel = e.has('cancel');
     const heldDir = (['up', 'down', 'left', 'right'] as Dir[]).find((d) => held.current.has(d));
     edge.current = new Set();
+    if (e.has('speed')) cycleSpeed();
     const ctx = canvas.current?.getContext('2d');
     const ov = ovRef.current;
 
@@ -516,7 +530,8 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
     // ---- 전투 ----
     const r = battle.current;
     if (r) {
-      updateBattle(r, dt, ok);
+      const mult = Math.max(speed.current, held.current.has('run') ? 3 : 1);
+      updateBattle(r, dt * mult, ok);
       if (ctx && battle.current) {
         const f = r.fight;
         const me = f.party[r.pIdx];
@@ -533,6 +548,7 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
         box(ctx, 16, H - 112, W - 32, 100);
         if (r.msg) wrapText(ctx, r.msg, 44, H - 90, W - 120, 30, 22, 2);
         if (r.hold && r.msg && Math.floor(time.current * 3) % 2) text(ctx, '▼', W - 64, H - 46, 20);
+        if (mult > 1) speedBadge(ctx, mult);
       }
       if (ctx && trans.current > 0) stripes(ctx, trans.current);
       return;
@@ -565,7 +581,7 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
       }
     } else if (dlg.current) {
       const d = dlg.current;
-      d.shown += dt * 45;
+      d.shown += dt * 45 * (speed.current > 1 || held.current.has('run') ? 2.5 : 1);
       if (ok || (cancel && d.shown >= d.msg.length)) {
         if (d.shown < d.msg.length) d.shown = d.msg.length;
         else {
@@ -1117,6 +1133,9 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
           <button className="r" {...press('right')}>▶</button>
         </div>
         <div className="pad-right">
+          <button className="special speed" onPointerDown={(e: PointerEvent) => (e.preventDefault(), cycleSpeed())}>
+            ▶▶{speed.current}
+          </button>
           <button className="special" {...press('cancel')}>
             B
           </button>
@@ -1125,7 +1144,7 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
           </button>
         </div>
       </div>
-      <p className="hint">방향키 이동 · Shift 또는 X를 누른 채 달리기 · Z 확인·말 걸기 · X 메뉴·취소</p>
+      <p className="hint">방향키 이동 · Shift 또는 X를 누른 채 달리기 · Z 확인·말 걸기 · X 메뉴·취소 · C(또는 Tab) 전투 배속 ×{speed.current} · 전투 중 Shift를 누르고 있으면 ×3</p>
     </>
   );
 
@@ -1186,6 +1205,33 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
     if (it.kind === 'ball' || it.kind === 'key') return setNote(it.desc);
     setOverlay({ k: 'party', mode: 'item', item: id });
   }
+}
+
+const SPEED_KEY = 'kkaebi-speed';
+function loadSpeed(): number {
+  try {
+    const v = Number(localStorage.getItem(SPEED_KEY));
+    return v === 2 || v === 3 ? v : 1;
+  } catch {
+    return 1;
+  }
+}
+/** 오른쪽 위 배속 표시 */
+function speedBadge(ctx: CanvasRenderingContext2D, mult: number) {
+  ctx.fillStyle = '#202030';
+  ctx.fillRect(W - 112, 10, 100, 34);
+  ctx.fillStyle = '#f8d048';
+  ctx.fillRect(W - 108, 14, 92, 26);
+  // 빨리감기 세모 두 개
+  ctx.fillStyle = '#202030';
+  for (const ox of [0, 14]) {
+    ctx.beginPath();
+    ctx.moveTo(W - 100 + ox, 19);
+    ctx.lineTo(W - 88 + ox, 27);
+    ctx.lineTo(W - 100 + ox, 35);
+    ctx.fill();
+  }
+  text(ctx, `×${mult}`, W - 40, 16, 20, '#202030', 'center');
 }
 
 type Wipe = 'swirl' | 'bars' | 'legend';

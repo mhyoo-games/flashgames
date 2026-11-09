@@ -7,6 +7,7 @@ import { MOVES, STATUS_NAME } from './moves.ts';
 import { byNo, type Species } from './species.ts';
 import { drawKkaebi, kkaebiSprite, silhouette, tinted } from './sprite.ts';
 import { TYPE_COLOR, type Type } from './types.ts';
+import { pxText, pxWidth } from './pxfont.ts';
 import type { Dir, GameState, MapDef, TimeOfDay } from './world.ts';
 
 export const W = 960;
@@ -17,13 +18,15 @@ type Px = (x: number, y: number, w: number, h: number, c: string) => void;
 
 export const FONT = '"DungGeunMo", "Galmuri11", ui-monospace, "Malgun Gothic", monospace';
 export function text(ctx: Ctx, s: string, x: number, y: number, size = 22, color = '#202030', align: CanvasTextAlign = 'left', shadow = false) {
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+    // 밝은 글씨는 진한 테두리, 어두운 글씨는 옅은 그림자
+    const light = parseInt(color.slice(1, 3), 16) + parseInt(color.slice(3, 5), 16) + parseInt(color.slice(5, 7), 16) > 500;
+    pxText(ctx, s, x, y, { size, color, outline: shadow || light ? '#202030' : undefined, shadow: !shadow && !light ? '#c8c8d0' : undefined }, align);
+    return;
+  }
   ctx.font = `bold ${size}px ${FONT}`;
   ctx.textAlign = align;
   ctx.textBaseline = 'top';
-  if (shadow) {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillText(s, x + 2, y + 2);
-  }
   ctx.fillStyle = color;
   ctx.fillText(s, x, y);
 }
@@ -554,12 +557,11 @@ export function dialog(ctx: Ctx, who: string, msg: string, shown: number, time: 
   if (shown >= msg.length && Math.floor(time * 3) % 2) text(ctx, '▼', W - 70, H - 46, 20, '#303048');
 }
 export function wrapText(ctx: Ctx, s: string, x: number, y: number, maxW: number, lh: number, size: number, maxLines = 9, color = '#202030') {
-  ctx.font = `bold ${size}px ${FONT}`;
   const lines: string[] = [];
   for (const para of s.split('\n')) {
     let cur = '';
     for (const ch of para) {
-      if (ctx.measureText(cur + ch).width > maxW) {
+      if (pxWidth(cur + ch, size) > maxW) {
         lines.push(cur);
         cur = '';
       }
