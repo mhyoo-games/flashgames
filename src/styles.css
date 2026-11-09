@@ -750,7 +750,8 @@ h2 {
   text-align: left;
   padding: 6px 4px;
   font: inherit;
-  font-size: 17px;
+  font-family: 'Galmuri14', 'Galmuri11', sans-serif;
+  font-size: 15px;
   box-shadow: none;
   border-radius: 0;
 }
@@ -860,7 +861,10 @@ h2 {
   outline-offset: -10px;
   border-radius: 6px;
   padding: 16px 18px;
-  font-family: 'DungGeunMo', 'Galmuri11', ui-monospace, monospace;
+  font-family: 'Galmuri11', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-size: 12px;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.25);
 }
 .kmenu {
@@ -872,7 +876,8 @@ h2 {
   overflow-y: auto;
 }
 .kmenu-title {
-  font-weight: 800;
+  font-family: 'Galmuri14', 'Galmuri11', sans-serif;
+  font-size: 15px;
   margin-bottom: 6px;
   color: #a03838;
   line-height: 1.4;
@@ -884,7 +889,8 @@ h2 {
   text-align: left;
   padding: 6px 6px;
   font: inherit;
-  font-size: 17px;
+  font-family: 'Galmuri14', 'Galmuri11', sans-serif;
+  font-size: 15px;
   box-shadow: none;
   border-radius: 4px;
   display: grid;
@@ -903,7 +909,7 @@ h2 {
 }
 .knote {
   margin: 8px 0 0;
-  font-size: 14px;
+  font-size: 12px;
   color: #50506a;
   line-height: 1.5;
 }
@@ -999,7 +1005,7 @@ h2 {
 }
 .kstats {
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 12px;
 }
 .kstats td {
   padding: 1px 6px;
@@ -1024,11 +1030,11 @@ h2 {
   padding: 4px 8px;
   border-radius: 4px;
   display: grid;
-  font-size: 14px;
+  font-size: 12px;
 }
 .kdim {
   opacity: 0.75;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .kshiny {
@@ -1053,7 +1059,8 @@ h2 {
   border-color: #e85838;
 }
 .kdex small {
-  font-size: 11px;
+  font-family: 'Galmuri9', 'Galmuri11', sans-serif;
+  font-size: 10px;
   white-space: nowrap;
 }
 .kq {
@@ -1110,4 +1117,26 @@ h2 {
 .ktitle input { color: #202030; background: #fff; }
 .kmove .ktype {
   justify-self: start;
+}
+
+/* 깨비 도감: 도트 글꼴(갈무리)은 원래 크기의 배수에서 가장 또렷하다 */
+.kgame-font,
+.ktitle,
+.kmenu h3,
+.kpanel h3 {
+  font-family: 'Galmuri11', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
+}
+.kpanel h3,
+.kmenu h3 {
+  font-family: 'Galmuri14', 'Galmuri11', sans-serif;
+  font-size: 15px;
+  font-weight: normal;
+}
+.kpad .speed {
+  font-size: 13px;
+  letter-spacing: -1px;
+  background: #f8d048;
+  color: #202030;
 }
