@@ -266,7 +266,7 @@ saessak.npc({
   name: '차돌',
   dir: 'down',
   hidden: (s) => !s.flags.dex || !!s.flags[`t:saessak:rival1`],
-  trainer: { name: '라이벌 차돌', team: [], prize: 300, smart: 1, sight: 6, before: '어이! 박사님 연구소에서 나도 하나 받았지. 실력 좀 볼까?', after: '쳇, 운이 좋았네! 다음엔 안 봐줘!', rival: true },
+  trainer: { name: '라이벌 차돌', team: [], prize: 300, smart: 0, sight: 6, before: '어이! 박사님 연구소에서 나도 하나 받았지. 실력 좀 볼까?', after: '쳇, 운이 좋았네! 다음엔 안 봐줘!', rival: true, soft: true },
 });
 
 // =================================================================

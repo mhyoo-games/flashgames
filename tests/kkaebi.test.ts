@@ -165,3 +165,17 @@ test('밸런스: 처음 깨비(레벨 5)는 1번길 야생(레벨 2~4)을 대체
     assert.ok(wins >= 26, `${SPECIES[starter - 1].name} ${wins}/30`);
   }
 });
+
+test('조사: 받침에 따라 을/를, 이/가, 은/는, (으)로', async () => {
+  const { josa } = await import('../src/games/kkaebi/josa.ts');
+  assert.equal(josa('불씨쥐을(를) 던졌다'), '불씨쥐를 던졌다');
+  assert.equal(josa('호리병을(를) 던졌다'), '호리병을 던졌다');
+  assert.equal(josa('콩닢이(가) 나타났다'), '콩닢이 나타났다');
+  assert.equal(josa('넝쿨노루은(는) 잤다'), '넝쿨노루는 잤다');
+  assert.equal(josa('고목사슴(으)로 진화'), '고목사슴으로 진화');
+  assert.equal(josa('물방울개구(으)로'), '물방울개구로');
+  assert.equal(josa('레벨 16이(가) 되었다'), '레벨 16이 되었다');
+  assert.equal(josa('레벨 12이(가) 되었다'), '레벨 12가 되었다');
+  assert.equal(josa('달토끼(으)로'), '달토끼로');
+  assert.equal(josa('용발톱(으)로'), '용발톱으로');
+});

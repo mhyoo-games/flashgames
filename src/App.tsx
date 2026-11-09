@@ -4,6 +4,7 @@ import { GAMES } from './games/registry';
 import { MazeGame } from './games/maze/MazeGame';
 import { DinoGame } from './games/dino/DinoGame';
 import { QuestGame } from './games/quest/QuestGame';
+import { KkaebiGame } from './games/kkaebi/KkaebiGame';
 import { Home } from './ui/Home';
 
 function route(): string {
@@ -38,6 +39,7 @@ export default function App() {
   };
   const home = () => go('');
 
+  if (page === 'kkaebi') return <KkaebiGame onBack={home} />;
   if (page === 'quest') return <QuestGame onBack={home} />;
   if (page === 'dino') return <DinoGame onBack={home} />;
   if (page === 'maze') return <MazeGame onBack={home} />;

@@ -16,6 +16,16 @@ export interface GameInfo {
 
 export const GAMES: GameInfo[] = [
   {
+    id: 'kkaebi',
+    title: '깨비 도감 ~금빛 호리병~',
+    tagline: '한빛 군도에 사는 깨비 195종! 호리병으로 잡고, 키우고, 진화시켜 여덟 체육관과 깨비 왕에 도전하자. 숨은 전설의 깨비 셋도 어딘가에…',
+    genre: '수집 RPG',
+    players: '1인',
+    song: 'kroute',
+    colors: ['#e8a838', '#58a848'],
+    controls: ['방향키 이동, Shift 달리기', 'Z / Enter 확인·말 걸기', 'X / Esc 메뉴·취소 (휴대폰은 A·B)'],
+  },
+  {
     id: 'quest',
     title: '주먹밥 용사전',
     tagline: '게으른 무술 소년 하루와 덜렁이 마법사 미르의 도트 RPG! 마을 사람과 이야기하고, 칸 위에서 움직이며 싸우는 전략 전투로 사라진 종을 되찾아라.',

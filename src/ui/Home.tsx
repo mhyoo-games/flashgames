@@ -3,6 +3,8 @@ import { load } from '../core/storage';
 import { charById } from '../games/dino/chars';
 import { drawHamster, drawStage, idlePose } from '../games/dino/render';
 import { blit } from '../games/quest/pixel';
+import { SPECIES } from '../games/kkaebi/species';
+import { drawKkaebi, kkaebiSprite } from '../games/kkaebi/sprite';
 import { personSprite, renderWorld } from '../games/quest/render';
 import { newWorld } from '../games/quest/world';
 import { GAMES, type GameInfo } from '../games/registry';
@@ -60,8 +62,33 @@ function QuestArt() {
   return <canvas ref={ref} width={960} height={528} className="art pixel" />;
 }
 
+function KkaebiArt() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const t0 = performance.now();
+    const show = [3, 6, 9, 87, 193, 60];
+    const draw = (now: number) => {
+      const ctx = ref.current?.getContext('2d');
+      if (!ctx) return;
+      const t = (now - t0) / 1000;
+      const g = ctx.createLinearGradient(0, 0, 0, 528);
+      g.addColorStop(0, '#f8d060');
+      g.addColorStop(1, '#88c868');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 960, 528);
+      show.forEach((no, i) => drawKkaebi(ctx, kkaebiSprite(SPECIES[no - 1], false, Math.floor(t * 2 + i) % 2), 110 + i * 150, 400 + Math.sin(t * 2 + i) * 8, 3.2));
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <canvas ref={ref} width={960} height={528} className="art pixel" />;
+}
+
 function Art({ id }: { id: string }) {
   if (id === 'dino') return <DinoArt />;
+  if (id === 'kkaebi') return <KkaebiArt />;
   if (id === 'quest') return <QuestArt />;
   return (
     <svg viewBox="0 0 200 110" className="art">
@@ -95,6 +122,7 @@ function Card({ g, onPlay }: { g: GameInfo; onPlay: () => void }) {
     g.id === 'maze'
       ? load<{ score: number }[]>('maze-scores', [])[0]?.score
       : (() => {
+          if (g.id === 'kkaebi') return load<{ s?: { caught: number[] } } | null>('kkaebi-v1', null)?.s?.caught.length || undefined;
           if (g.id === 'quest') return load<{ w?: { flags: Record<string, boolean> } } | null>('quest-v1', null)?.w?.flags.clear1 ? 1 : undefined;
           const r = load<{ clears?: Record<string, number> }>('dino-v1', {});
           const n = Object.keys(r.clears ?? {}).length;
@@ -111,7 +139,7 @@ function Card({ g, onPlay }: { g: GameInfo; onPlay: () => void }) {
         <p>{g.tagline}</p>
         <small className="muted">
           {g.players}
-          {best !== undefined && (g.id === 'maze' ? ` · 최고 ${best.toLocaleString()}점` : g.id === 'quest' ? ' · 제1장 클리어' : ` · 스토리 클리어 ${best}마리`)}
+          {best !== undefined && (g.id === 'maze' ? ` · 최고 ${best.toLocaleString()}점` : g.id === 'quest' ? ' · 제1장 클리어' : g.id === 'kkaebi' ? ` · 도감 ${best}종` : ` · 스토리 클리어 ${best}마리`)}
         </small>
       </div>
       <span className="play">▶ 플레이</span>

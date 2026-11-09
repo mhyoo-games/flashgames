@@ -10,7 +10,7 @@ export type Ev =
   | { t: 'msg'; s: string }
   | { t: 'hp'; side: Side; hp: number; max: number }
   | { t: 'anim'; side: Side; kind: 'atk' | 'hit' | 'faint' | 'stat' | 'status' | 'send' | 'recall' | 'throw' | 'shake' | 'caught' | 'escape'; move?: string; up?: boolean }
-  | { t: 'swap'; side: Side; idx: number }
+  | { t: 'swap'; side: Side; idx: number; hp: number }
   | { t: 'exp'; idx: number; exp: number; lv: number }
   | { t: 'level'; idx: number; lv: number };
 
@@ -364,12 +364,12 @@ export class Fight {
       this.p = idx;
       this.pv = freshVol();
       this.fought.add(idx);
-      ev.push({ t: 'swap', side: 'p', idx }, { t: 'msg', s: `가랏, ${nameOf(this.me)}!` }, { t: 'anim', side: 'p', kind: 'send' });
+      ev.push({ t: 'swap', side: 'p', idx, hp: this.me.hp }, { t: 'msg', s: `가랏, ${nameOf(this.me)}!` }, { t: 'anim', side: 'p', kind: 'send' });
     } else {
       this.f = idx;
       this.fv = freshVol();
       this.fought = new Set([this.p]);
-      ev.push({ t: 'swap', side: 'f', idx }, { t: 'msg', s: `${this.trainer!.name}은(는) ${nameOf(this.foe)}을(를) 내보냈다!` }, { t: 'anim', side: 'f', kind: 'send' });
+      ev.push({ t: 'swap', side: 'f', idx, hp: this.foe.hp }, { t: 'msg', s: `${this.trainer!.name}은(는) ${nameOf(this.foe)}을(를) 내보냈다!` }, { t: 'anim', side: 'f', kind: 'send' });
     }
   }
 
@@ -407,7 +407,7 @@ export class Fight {
     this.p = idx;
     this.pv = freshVol();
     this.fought.add(idx);
-    ev.push({ t: 'swap', side: 'p', idx }, { t: 'msg', s: `가랏, ${nameOf(this.me)}!` }, { t: 'anim', side: 'p', kind: 'send' });
+    ev.push({ t: 'swap', side: 'p', idx, hp: this.me.hp }, { t: 'msg', s: `가랏, ${nameOf(this.me)}!` }, { t: 'anim', side: 'p', kind: 'send' });
     return ev;
   }
 

@@ -61,6 +61,8 @@ export interface TrainerDef {
   sight: number;
   gym?: number;
   rival?: boolean;
+  /** 져도 괜찮은 승부 (첫 라이벌전) */
+  soft?: boolean;
 }
 
 export interface NpcDef {

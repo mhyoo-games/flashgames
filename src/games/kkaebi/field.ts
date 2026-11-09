@@ -142,7 +142,7 @@ export function interact(s: GameState, m: MapDef): Interaction {
   const [dx, dy] = DIRS[s.dir];
   let x = s.x + dx;
   let y = s.y + dy;
-  if (tile(m, x, y) === 'c') {
+  if (tile(m, x, y) === 'c' && !npcsOf(s, m).some((n) => n.x === x && n.y === y)) {
     x += dx;
     y += dy;
   }
