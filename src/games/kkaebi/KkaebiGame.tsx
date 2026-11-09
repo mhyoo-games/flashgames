@@ -86,7 +86,7 @@ function Title({ hasSave, onNew, onLoad, saved }: { hasSave: boolean; onNew: (na
       ctx.restore();
       show.forEach((no, i) => {
         const a = (i / show.length) * Math.PI * 2 + t * 0.4;
-        drawKkaebi(ctx, kkaebiSprite(byNo(no), false, Math.floor(t * 2 + i) % 2), W / 2 + Math.cos(a) * 370, 390 + Math.sin(a) * 70, 2.6);
+        drawKkaebi(ctx, kkaebiSprite(byNo(no), false, Math.floor(t * 2 + i) % 2), W / 2 + Math.cos(a) * 370, 390 + Math.sin(a) * 70, 3.2);
       });
       text(ctx, '깨비 도감', W / 2, 40 + Math.sin(t * 1.5) * 3, 72, '#fff0a0', 'center', true);
       text(ctx, '~ 금빛 호리병 ~', W / 2, 128, 36, '#ffffff', 'center', true);

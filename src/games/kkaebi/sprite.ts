@@ -7,7 +7,9 @@ import { TYPE_COLOR, type Type } from './types.ts';
 import { sigFor } from './sigs.ts';
 import { FORMS, FORM_PAL } from './forms.ts';
 
-export const SG = 64;
+export const SG = 96;
+/** 디자인 좌표(64칸 기준)를 실제 칸으로 키우는 배율 */
+const RES = SG / 64;
 
 type RGB = [number, number, number];
 const hex = (c: string): RGB => {
@@ -245,16 +247,16 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
   const big = st >= 2;
   const legend = !!sp.legend;
   // 단계별 비율: 아기는 머리가 크고 몸이 짧다
-  const s = (legend ? 1.3 : [0.86, 1.06, 1.26][st - 1]) * fit;
+  const s = (legend ? 1.3 : [0.86, 1.06, 1.26][st - 1]) * fit * RES;
   const headK = [1.28, 1.08, 0.96][st - 1];
   const bodyK = [0.86, 1.0, 1.12][st - 1];
   const breathe = frame === 1 ? 0.6 : 0;
   const fl = body === 'ghost' || body === 'fish' || body === 'bird' ? -3 - (frame === 1 ? 1 : 0) : 0;
-  const X = (x: number) => 32 + x * s;
-  const Y = (y: number) => 62 + (y + fl) * s;
+  const X = (x: number) => SG / 2 + x * s;
+  const Y = (y: number) => SG - 2 * RES + (y + fl) * s;
   const E = (x: number, y: number, rx: number, ry: number, v: number, rot = 0, only?: number) => g.ellipse(X(x), Y(y), rx * s, ry * s, v, rot, only);
   const P = (pts: [number, number][], v: number, only?: number) => g.poly(pts.map(([x, y]) => [X(x), Y(y)]), v, only);
-  const Ln = (x1: number, y1: number, x2: number, y2: number, w: number, v: number, only?: number) => g.line(X(x1), Y(y1), X(x2), Y(y2), Math.max(1, w * s), v, only);
+  const Ln = (x1: number, y1: number, x2: number, y2: number, w: number, v: number, only?: number) => g.line(X(x1), Y(y1), X(x2), Y(y2), Math.max(1.2, w * s), v, only);
   const Cv = (pts: [number, number][], w0: number, w1: number, v: number) => g.curve(pts.map(([x, y]) => [X(x), Y(y)]), w0 * s, w1 * s, v);
   const has = (x: Type) => sp.types.includes(x);
   const wide = 0.9 + r() * 0.2;
@@ -268,6 +270,8 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
 
   /** 주둥이·코: 생김새마다 다르다 (얼굴은 왼쪽 앞을 본다) */
   const muzzle = (k: Kind | undefined, hx: number, hy: number, hr: number) => {
+    // 뒷모습에는 얼굴(코·입)을 그리지 않는다
+    if (back) return;
     switch (k) {
       case 'deer':
       case 'dog':
@@ -907,7 +911,7 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
   hy = head[1];
   hr = head[2];
   if (!back) {
-    const eyeR = (st === 1 ? 3.3 : st === 2 ? 2.8 : 2.4) * (body === 'ghost' || body === 'blob' ? 1.2 : 1) * face.eyeK;
+    const eyeR = (st === 1 ? 3.6 : st === 2 ? 3.1 : 2.75) * (body === 'ghost' || body === 'blob' ? 1.15 : 1) * face.eyeK;
     const sep = hr * face.sep;
     const ey2 = hy + hr * face.ey;
     const fierce = !face.calm && final && (has('dragon') || has('dark') || has('fight') || sp.base[1] > sp.base[3] + 10);
@@ -916,55 +920,90 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
     for (const k of fish ? [-1] : [-1, 1]) {
       const ex2 = fish ? hx - 0.5 : hx + k * sep - hr * face.shift;
       const far = k === 1;
-      const rr = eyeR * (far ? 0.88 : 1) * s * (fish ? 1.25 : 1);
+      const rr = Math.max(2.4, eyeR * (far ? 0.9 : 1) * (s / RES) * RES * (fish ? 1.2 : 1));
+      const ry = rr * 1.22;
       const cx = X(ex2);
       const cy = Y(ey2);
       if (blink) {
-        g.line(cx - rr, cy, cx + rr, cy, 1, 6);
+        // 감은 눈: 아래로 휜 굵은 선
+        for (let x = -Math.ceil(rr); x <= Math.ceil(rr); x++) {
+          const yy = cy + (1 - (x / rr) ** 2) * rr * 0.35;
+          g.set(cx + x, yy, 6);
+          g.set(cx + x, yy + 1, 6);
+        }
         continue;
       }
-      for (let y = -Math.ceil(rr * 1.3); y <= Math.ceil(rr * 1.3); y++)
-        for (let x = -Math.ceil(rr); x <= Math.ceil(rr); x++) {
-          const d = (x * x) / (rr * rr + 0.3) + (y * y) / ((rr * 1.28) ** 2 + 0.3);
-          if (d > 1) continue;
-          if (fierce && y < -rr * 0.95 + -x * k * 0.6) continue;
-          // 흰자 → 홍채 → 눈동자
-          const ix = x + 0.4;
-          const iy = y + 0.6;
-          const di = (ix * ix) / ((rr * 0.78) ** 2) + (iy * iy) / ((rr * 1.02) ** 2);
-          g.set(cx + x, cy + y, di > 1 ? 5 : di > 0.3 ? (iy > rr * 0.25 ? 17 : 10) : 6);
+      // 앞쪽(왼쪽)을 보는 눈동자
+      const lookX = -rr * 0.12;
+      for (let y = -Math.ceil(ry) - 1; y <= Math.ceil(ry) + 1; y++)
+        for (let x = -Math.ceil(rr) - 1; x <= Math.ceil(rr) + 1; x++) {
+          const d = (x * x) / (rr * rr) + (y * y) / (ry * ry);
+          if (d > 1.18) continue;
+          // 사나운 눈: 위쪽 안쪽을 비스듬히 깎는다
+          const lid = fierce ? -ry * 0.62 + -x * k * 0.75 : -99;
+          if (y < lid - 1.2) continue;
+          let v: number;
+          if (d > 0.78 || y < lid + 0.4) v = 6;
+          else {
+            const ix = x - lookX;
+            const iy = y - ry * 0.08;
+            const di = (ix * ix) / ((rr * 0.66) ** 2) + (iy * iy) / ((ry * 0.78) ** 2);
+            const dp = (ix * ix) / ((rr * 0.32) ** 2) + (iy * iy) / ((ry * 0.4) ** 2);
+            v = dp <= 1 ? 6 : di <= 1 ? (iy > ry * 0.18 ? 17 : 10) : 5;
+          }
+          // 위 눈꺼풀은 한 칸 더 굵게
+          if (!fierce && y < 0 && d > 0.62) v = 6;
+          g.set(cx + x, cy + y, v);
         }
-      g.set(cx - rr * 0.35, cy - rr * 0.55, 9);
-      g.set(cx - rr * 0.35 + 1, cy - rr * 0.55, 9);
-      g.set(cx + rr * 0.35, cy + rr * 0.5, 9);
-      if (fierce) g.line(cx + k * rr * 1.05, cy - rr * 1.6, cx - k * rr * 0.9, cy - rr * 0.55, 1, 6);
+      // 반짝임: 큰 것 하나 + 작은 것 하나
+      g.ellipse(cx + lookX - rr * 0.28, cy - ry * 0.3, Math.max(0.9, rr * 0.24), Math.max(0.9, rr * 0.28), 9);
+      g.set(cx + lookX + rr * 0.3, cy + ry * 0.32, 9);
+      // 눈썹
+      if (fierce) g.line(cx + k * rr * 1.15, cy - ry * 1.25, cx - k * rr * 0.85, cy - ry * 0.55, 1.6 * RES, 6);
     }
     // 볼
     if (st < 3 && face.blush && body !== 'rock' && body !== 'fish') {
-      g.ellipse(X(hx - sep - 2.6), Y(ey2 + 3.4), 1.5, 1, 7);
-      g.ellipse(X(hx + sep + 2), Y(ey2 + 3.4), 1.3, 0.9, 7);
+      g.ellipse(X(hx - sep - 2.4), Y(ey2 + 3.6), 1.6 * RES, 1 * RES, 7);
+      g.ellipse(X(hx + sep + 1.8), Y(ey2 + 3.6), 1.4 * RES, 0.9 * RES, 7);
     }
     // 입 (만화풍: 웃는 입 / 송곳니)
     const my = fish ? ey2 + hr * 0.55 : hy + hr * face.my;
     const mx = fish ? hx - hr * 0.95 : hx - hr * face.mx;
+    const mw = Math.max(2.4, hr * 0.32 * (s / RES)) * RES * 0.9;
+    const MX = X(mx);
+    const MY = Y(my);
     if (face.mouth === 'wide') {
-      // 개구리·도마뱀: 얼굴을 가로지르는 큰 입
-      g.line(X(mx - hr * 0.7), Y(my), X(mx + hr * 0.55), Y(my + 0.6), 1, 6);
-      if (st === 1) g.ellipse(X(mx - hr * 0.1), Y(my + 1.2), 1.6, 0.9, 8);
+      // 개구리·도마뱀: 얼굴을 가로지르는 큰 입 (끝이 살짝 올라간다)
+      const x0 = X(mx - hr * 0.7);
+      const x1 = X(mx + hr * 0.55);
+      for (let x = Math.round(x0); x <= x1; x++) {
+        const t = (x - x0) / (x1 - x0);
+        g.set(x, MY - Math.sin(t * Math.PI) * -1.2 - (t < 0.12 || t > 0.88 ? 1 : 0), 6);
+      }
+      if (st === 1) {
+        g.ellipse(MX - hr * 0.1 * s, MY + 2, mw * 0.6, mw * 0.35, 8);
+        g.ellipse(MX - hr * 0.1 * s, MY + 2.6, mw * 0.35, mw * 0.18, 7);
+      }
     } else if (face.mouth === 'beak' || face.mouth === 'none') {
       /* 부리가 입 */
-    } else if (final && fierce) {
-      g.line(X(mx - 3), Y(my), X(mx + 3), Y(my), 1.2, 8);
-      g.set(X(mx - 2), Y(my) - 1, 5);
-      g.set(X(mx + 2), Y(my) - 1, 5);
-    } else if (st === 1 || r() < 0.5) {
-      g.set(X(mx - 1.5), Y(my), 6);
-      g.set(X(mx - 0.5), Y(my) + 1, 6);
-      g.set(X(mx + 0.5), Y(my) + 1, 6);
-      g.set(X(mx + 1.5), Y(my), 6);
-      if (st === 1) g.set(X(mx), Y(my) + 1, 8);
+    } else if (fierce) {
+      // 크게 벌린 입 + 송곳니
+      g.ellipse(MX, MY + mw * 0.35, mw, mw * 0.62, 6);
+      g.ellipse(MX, MY + mw * 0.4, mw * 0.78, mw * 0.45, 8);
+      g.ellipse(MX, MY + mw * 0.68, mw * 0.45, mw * 0.18, 7);
+      for (const k of [-1, 1]) g.poly([[MX + k * mw * 0.75, MY - 0.3], [MX + k * mw * 0.35, MY - 0.3], [MX + k * mw * 0.52, MY + mw * 0.55]], 5);
+    } else if (st === 1 || r() < 0.55) {
+      // 활짝 웃는 입: 검은 테 + 입속 + 혀
+      g.ellipse(MX, MY + mw * 0.2, mw * 0.8, mw * 0.55, 6);
+      g.ellipse(MX, MY + mw * 0.25, mw * 0.58, mw * 0.36, 8);
+      g.ellipse(MX, MY + mw * 0.45, mw * 0.36, mw * 0.16, 7);
+      for (let x = -Math.ceil(mw * 0.85); x <= mw * 0.85; x++) g.set(MX + x, MY - 0.5, 6);
     } else {
-      g.ellipse(X(mx), Y(my + 0.6), 1.6, 1.1, 8);
+      // 다문 입: 'ㅅ'자 미소
+      for (let x = -Math.ceil(mw); x <= mw; x++) {
+        const t = Math.abs(x) / mw;
+        g.set(MX + x, MY + (1 - t) * -0.8 + t * t * -1.6 + 1, 6);
+      }
     }
     if (!form) switch (sig.face) {
       case 'whisker':
@@ -1026,7 +1065,7 @@ function bake(g: Grid, pal: Pal): HTMLCanvasElement {
   }
   // 부드러운 높이 → 기울기 = 면의 방향
   const hgt = new Float32Array(N);
-  for (let i = 0; i < N; i++) hgt[i] = g.c[i] ? Math.min(dist[i], 6) : 0;
+  for (let i = 0; i < N; i++) hgt[i] = g.c[i] ? Math.min(dist[i], 9) : 0;
   const blur = (a: Float32Array) => {
     const o = new Float32Array(N);
     for (let y = 0; y < SG; y++)
@@ -1061,7 +1100,7 @@ function bake(g: Grid, pal: Pal): HTMLCanvasElement {
       if (!v) {
         // 바깥 외곽선: 이웃한 색을 아주 어둡게
         const nb = [g.get(x - 1, y), g.get(x + 1, y), g.get(x, y - 1), g.get(x, y + 1)].find((n) => n);
-        if (nb) put(i, mix(pal[nb] ?? [0, 0, 0], [12, 6, 24], 0.82));
+        if (nb) put(i, mix(pal[nb] ?? [0, 0, 0], [16, 8, 28], 0.88));
         continue;
       }
       if (FLAT.has(v)) {
@@ -1073,17 +1112,23 @@ function bake(g: Grid, pal: Pal): HTMLCanvasElement {
       const gy = at(x, y + 1) - at(x, y - 1);
       // 빛은 왼쪽 위에서
       let light = -(gx * -0.62 + gy * -0.78) * 0.9;
-      light += (Math.min(dist[i], 4) - 2) * 0.1;
+      light += (Math.min(dist[i], 6) - 3) * 0.07;
       // 아래쪽일수록 조금 어둡게
       light -= (y / SG) * 0.25;
       let tone = light > 0.55 ? 4 : light > 0.2 ? 3 : light > -0.22 ? 2 : light > -0.6 ? 1 : 0;
-      // 경계 근처는 섞어 찍기
-      if (tone === 2 && light < -0.12 && (x + y) % 2 === 0) tone = 1;
-      if (tone === 3 && light < 0.26 && (x + y) % 2 === 0) tone = 2;
-      // 다른 부위와 닿은 곳은 선을 그은 듯 어둡게 (앞에 있는 부위가 아니면)
+      // 셀 그림자: 테두리 쪽 한 칸은 반드시 그늘, 아주 밝은 곳만 하이라이트
+      if (tone === 4 && dist[i] < 3) tone = 3;
+      // 다른 부위와 닿은 곳: 만화처럼 진한 선
+      const dn = g.get(x, y + 1);
+      const rt = g.get(x + 1, y);
       const up2 = g.get(x, y - 1);
       const left = g.get(x - 1, y);
-      if ((up2 && up2 !== v && !FLAT.has(up2)) || (left && left !== v && !FLAT.has(left))) tone = Math.min(tone, 1);
+      const edge = (n: number) => n && n !== v && !FLAT.has(n);
+      if (edge(dn) || edge(rt)) {
+        put(i, mix(ramps[v][0], [16, 8, 28], 0.45));
+        continue;
+      }
+      if (edge(up2) || edge(left)) tone = Math.min(tone, 1);
       put(i, ramps[v][tone]);
     }
   ctx.putImageData(img, 0, 0);
@@ -1167,7 +1212,7 @@ export function silhouette(sp: Species): HTMLCanvasElement {
 /** 그리기: scale은 예전 48칸 기준 크기로 맞춰 준다 */
 export function drawKkaebi(ctx: CanvasRenderingContext2D, cv: HTMLCanvasElement, cx: number, bottom: number, scale: number, flip = false, squash = 1) {
   const raw = (scale * 48) / SG;
-  const k = raw >= 1.5 ? Math.round(raw) : raw;
+  const k = raw >= 1.15 ? Math.round(raw) : raw;
   ctx.imageSmoothingEnabled = false;
   ctx.save();
   ctx.translate(Math.round(cx), Math.round(bottom));
