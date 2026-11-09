@@ -180,6 +180,43 @@ test('조사: 받침에 따라 을/를, 이/가, 은/는, (으)로', async () =>
   assert.equal(josa('용발톱(으)로'), '용발톱으로');
 });
 
+test('생김새: 모든 계열이 따로 디자인되어 있고, 3단계 그림이 칸 안에 들어간다', async () => {
+  const { FORMS } = await import('../src/games/kkaebi/forms.ts');
+  const lines = new Set(SPECIES.map((s) => s.line));
+  for (const l of lines) assert.ok(FORMS[l], `계열 ${l} 디자인 없음`);
+  // 가짜 붓으로 그려 보고 좌표 범위·부위 수를 잰다
+  for (const sp of SPECIES) {
+    let minY = 0;
+    let maxX = 0;
+    let parts = 0;
+    const mark = (x: number, y: number, r = 0) => {
+      parts++;
+      minY = Math.min(minY, y - r);
+      maxX = Math.max(maxX, Math.abs(x) + r);
+    };
+    const d = {
+      E: (x: number, y: number, rx: number, ry: number) => mark(x, y, Math.max(rx, ry)),
+      P: (pts: [number, number][]) => pts.forEach(([x, y]) => mark(x, y)),
+      Ln: (x1: number, y1: number, x2: number, y2: number) => (mark(x1, y1), mark(x2, y2)),
+      Cv: (pts: [number, number][]) => pts.forEach(([x, y]) => mark(x, y)),
+      B: (x: number, y: number, rx: number, ry: number) => mark(x, y, Math.max(rx, ry)),
+      set: (x: number, y: number) => mark(x, y),
+      get: () => 0,
+      muzzle: () => undefined,
+      st: sp.legend ? 3 : sp.stage,
+      frame: 1,
+      up: -2,
+      has: (t: string) => sp.types.includes(t as never),
+      r: () => 0.5,
+      s: 1,
+    };
+    const res = FORMS[sp.line](d);
+    assert.ok(parts > 5, `${sp.name}: 부위가 너무 적음`);
+    assert.ok(minY > -72 && maxX < 42, `${sp.name}: 그림이 너무 큼 (${minY}, ${maxX})`);
+    assert.ok(res.head[2] > 2, `${sp.name}: 얼굴 자리`);
+  }
+});
+
 test('생김새: 계열마다 특징이 있고, 3단계는 더 화려하다', async () => {
   const { SIGS, sigFor } = await import('../src/games/kkaebi/sigs.ts');
   const lines = new Set(SPECIES.map((s) => s.line));

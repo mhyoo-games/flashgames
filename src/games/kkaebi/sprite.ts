@@ -2,9 +2,10 @@
 // 1) 몸 형태 + 계열마다 정한 「대표 특징」(뿔·볏·갈기·날개·꼬리·등·얼굴·무늬·소품)을 색 번호로 칠하고
 // 2) 부위마다 거리 지도를 만들어 왼쪽 위에서 빛이 오는 5단 명암, 색 외곽선, 부위 경계선을 넣는다.
 // 단계가 오를수록 비율이 바뀌고(아기 → 어른), 특징이 늘고 커지며, 3단계는 장식색과 반짝임이 붙는다.
-import type { Species } from './species.ts';
+import type { Body, Species } from './species.ts';
 import { TYPE_COLOR, type Type } from './types.ts';
 import { sigFor } from './sigs.ts';
+import { FORMS, FORM_PAL } from './forms.ts';
 
 export const SG = 64;
 
@@ -98,7 +99,14 @@ class Grid {
 }
 
 // ---------------- 대표 특징 ----------------
+/** 얼굴 생김새: 주둥이·코·귀·눈 자리가 달라진다 */
+export type Kind = 'deer' | 'rodent' | 'cat' | 'tiger' | 'dog' | 'bear' | 'boar' | 'rabbit' | 'sheep' | 'seal' | 'tapir' | 'mole' | 'ape' | 'rhino' | 'frog' | 'lizard' | 'turtle' | 'owl';
 export interface Sig {
+  kind?: Kind;
+  /** 단계마다 다른 얼굴 (없으면 kind) */
+  kinds?: Kind[];
+  /** 단계마다 다른 몸 (예: 네 발 → 두 발로 일어선다) */
+  bodies?: Body[];
   ear?: 'pointy' | 'round' | 'long' | 'fin' | 'none';
   horn?: 'oni' | 'goat' | 'antler' | 'unicorn' | 'twin' | 'crown' | 'none';
   crest?: 'fin' | 'flame' | 'leaf' | 'feather' | 'crystal' | 'spikes' | 'cloud';
@@ -121,6 +129,57 @@ function rnd(seed: number) {
   };
 }
 
+export interface Face {
+  ey: number;
+  sep: number;
+  shift: number;
+  eyeK: number;
+  mx: number;
+  my: number;
+  mouth: 'smile' | 'wide' | 'beak' | 'none';
+  blush: boolean;
+  /** 3단계여도 순한 눈 */
+  calm?: boolean;
+}
+/** 생김새별 눈·입 자리 (머리 반지름에 대한 비율) */
+function faceOf(kind: Kind | undefined, body: Body, st: number): Face {
+  const f: Face = { ey: 0.02, sep: 0.45, shift: 0.12, eyeK: 1, mx: 0.12, my: 0.48, mouth: 'smile', blush: true };
+  switch (kind) {
+    case 'deer':
+    case 'dog':
+      return { ...f, ey: -0.12, sep: 0.4, shift: -0.05, eyeK: 0.92, mx: 0.85, my: 0.62 };
+    case 'cat':
+    case 'tiger':
+      return { ...f, ey: -0.05, sep: 0.46, my: 0.6, mx: 0.22, eyeK: kind === 'tiger' && st === 3 ? 0.95 : 1.05 };
+    case 'rodent':
+    case 'rabbit':
+      return { ...f, ey: -0.08, sep: 0.44, mx: 0.3, my: 0.62 };
+    case 'bear':
+    case 'ape':
+      return { ...f, ey: -0.12, sep: 0.42, mx: 0.38, my: 0.6, eyeK: 0.9 };
+    case 'boar':
+    case 'rhino':
+      return { ...f, ey: -0.2, sep: 0.38, shift: -0.08, eyeK: 0.85, mx: 0.75, my: 0.66, blush: false };
+    case 'sheep':
+      return { ...f, ey: 0.0, sep: 0.36, shift: 0.22, mx: 0.32, my: 0.66, eyeK: 0.9 };
+    case 'seal':
+      return { ...f, ey: -0.12, sep: 0.46, mx: 0.3, my: 0.62, eyeK: 1.15 };
+    case 'tapir':
+    case 'mole':
+      return { ...f, ey: -0.18, sep: 0.38, shift: -0.06, eyeK: kind === 'mole' ? 0.6 : 0.85, mx: 0.5, my: 0.62 };
+    case 'frog':
+      return { ...f, ey: -0.58, sep: 0.5, eyeK: 1.12, mx: 0.1, my: 0.42, mouth: 'wide' };
+    case 'lizard':
+    case 'turtle':
+      return { ...f, ey: -0.18, sep: 0.4, shift: -0.05, mx: 0.62, my: 0.5, mouth: 'wide', blush: kind === 'turtle' };
+    case 'owl':
+      return { ...f, ey: 0, sep: 0.45, eyeK: 1.35, mouth: 'beak' };
+  }
+  if (body === 'bird') return { ...f, mouth: 'beak' };
+  return f;
+}
+const KIND_EAR: Partial<Record<Kind, Sig['ear']>> = { deer: 'pointy', rodent: 'round', cat: 'pointy', tiger: 'round', dog: 'pointy', bear: 'round', boar: 'pointy', rabbit: 'long', sheep: 'none', seal: 'none', tapir: 'round', mole: 'none', ape: 'round', rhino: 'round', frog: 'none', lizard: 'none', turtle: 'none', owl: 'none' };
+
 /** 계열마다 정한 특징이 없으면 속성으로 정한다 */
 function sigOf(sp: Species): Sig {
   const base = sigFor(sp.line, sp.legend ? 3 : sp.stage);
@@ -129,6 +188,8 @@ function sigOf(sp: Species): Sig {
   const out: Sig = { ...base };
   if (!out.tail) out.tail = has('fire') ? 'flame' : has('grass') ? 'leaf' : has('electric') ? 'bolt' : has('rock') || has('steel') ? 'club' : 'thin';
   if (!out.horn) out.horn = has('dragon') ? 'twin' : 'none';
+  const kd = out.kinds?.[(sp.legend ? 3 : sp.stage) - 1] ?? out.kind;
+  if (!out.ear && kd) out.ear = KIND_EAR[kd];
   if (!out.ear) out.ear = sp.body === 'fish' || sp.body === 'serpent' || sp.body === 'rock' || sp.body === 'bug' || sp.body === 'plant' ? 'none' : 'pointy';
   return out;
 }
@@ -140,9 +201,10 @@ interface Pal {
   [k: number]: RGB;
 }
 function palette(sp: Species, hue: number, back: boolean): Pal {
-  const main = hueShift(hex(TYPE_COLOR[sp.types[0]]), hue);
-  const second = sp.types[1] ? hex(TYPE_COLOR[sp.types[1]]) : hex(ACCENT[sp.types[0]] ?? '#ffd23a');
-  return {
+  const fp = FORM_PAL[sp.line]?.[(sp.legend ? 3 : sp.stage) - 1] ?? FORM_PAL[sp.line]?.[0];
+  const main = hueShift(hex(fp?.main ?? TYPE_COLOR[sp.types[0]]), hue);
+  const second = fp?.accent ? hex(fp.accent) : sp.types[1] ? hex(TYPE_COLOR[sp.types[1]]) : hex(ACCENT[sp.types[0]] ?? '#ffd23a');
+  const pal: Pal = {
     1: back ? mix(main, [0, 0, 0], 0.08) : main,
     2: mix(main, [255, 248, 228], 0.72),
     3: second,
@@ -155,12 +217,19 @@ function palette(sp: Species, hue: number, back: boolean): Pal {
     10: irisOf(sp),
     17: mix(irisOf(sp), [255, 255, 255], 0.38),
     16: mix(main, [40, 20, 70], 0.32),
+    18: [255, 128, 40],
+    19: [70, 140, 235],
+    20: [200, 236, 255],
+    21: mix(main, [20, 10, 30], 0.68),
     11: [150, 96, 50],
     12: [240, 196, 70],
     13: [255, 236, 150],
     15: mix(second, [255, 255, 255], 0.62),
-    14: sp.types[0] === 'grass' ? mix(main, [215, 235, 70], 0.5) : [96, 176, 72],
+    14: [88, 186, 64],
   };
+  if (fp?.belly) pal[2] = hex(fp.belly);
+  if (fp?.belly && back) pal[2] = mix(pal[2], [0, 0, 0], 0.05);
+  return pal;
 }
 const ACCENT: Partial<Record<Type, string>> = { fire: '#ffd23a', water: '#bfefff', grass: '#ff9ac0', electric: '#ff7a2a', ice: '#ffffff', fight: '#ffe07a', normal: '#a07850', poison: '#e0f060', ground: '#8a5a2a', mind: '#7ad0ff', rock: '#7a6a50', ghost: '#ff6ad0', dragon: '#ffd23a', dark: '#e83a3a', steel: '#5a7ad8', light: '#ffe8a0', bug: '#e8503a', wind: '#ffffff' };
 
@@ -170,6 +239,8 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
   const sig = sigOf(sp);
   const r = rnd(sp.seed);
   const st = sp.legend ? 3 : sp.stage;
+  let body: Body = sig.bodies?.[st - 1] ?? sp.body;
+  const kind: Kind | undefined = sig.kinds?.[st - 1] ?? sig.kind;
   const final = st === 3;
   const big = st >= 2;
   const legend = !!sp.legend;
@@ -178,7 +249,7 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
   const headK = [1.28, 1.08, 0.96][st - 1];
   const bodyK = [0.86, 1.0, 1.12][st - 1];
   const breathe = frame === 1 ? 0.6 : 0;
-  const fl = sp.body === 'ghost' || sp.body === 'fish' || sp.body === 'bird' ? -3 - (frame === 1 ? 1 : 0) : 0;
+  const fl = body === 'ghost' || body === 'fish' || body === 'bird' ? -3 - (frame === 1 ? 1 : 0) : 0;
   const X = (x: number) => 32 + x * s;
   const Y = (y: number) => 62 + (y + fl) * s;
   const E = (x: number, y: number, rx: number, ry: number, v: number, rot = 0, only?: number) => g.ellipse(X(x), Y(y), rx * s, ry * s, v, rot, only);
@@ -194,6 +265,84 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
   let head: [number, number, number] = [0, -24, 8];
   let tailRoot: [number, number] = [8, -8];
   let neck: [number, number] = [0, -18];
+
+  /** 주둥이·코: 생김새마다 다르다 (얼굴은 왼쪽 앞을 본다) */
+  const muzzle = (k: Kind | undefined, hx: number, hy: number, hr: number) => {
+    switch (k) {
+      case 'deer':
+      case 'dog':
+        // 길쭉한 주둥이 + 끝에 까만 코
+        E(hx - hr * 0.72, hy + hr * 0.34, hr * (k === 'deer' ? 0.6 : 0.66), hr * 0.4, 1);
+        E(hx - hr * 0.7, hy + hr * 0.5, hr * 0.5, hr * 0.24, 2);
+        E(hx - hr * 1.22, hy + hr * 0.22, hr * 0.2, hr * 0.16, 6);
+        break;
+      case 'cat':
+      case 'tiger':
+        for (const d of [-1, 1]) E(hx - hr * 0.22 + d * hr * 0.22, hy + hr * 0.42, hr * 0.27, hr * 0.21, 2);
+        P([[hx - hr * 0.34, hy + hr * 0.18], [hx - hr * 0.1, hy + hr * 0.18], [hx - hr * 0.22, hy + hr * 0.32]], 7);
+        break;
+      case 'rodent':
+        E(hx - hr * 0.3, hy + hr * 0.42, hr * 0.38, hr * 0.27, 2);
+        E(hx - hr * 0.5, hy + hr * 0.24, hr * 0.14, hr * 0.11, 7);
+        // 앞니
+        g.set(X(hx - hr * 0.34), Y(hy + hr * 0.66), 5);
+        g.set(X(hx - hr * 0.34) + 1, Y(hy + hr * 0.66), 5);
+        g.set(X(hx - hr * 0.34), Y(hy + hr * 0.66) + 1, 5);
+        g.set(X(hx - hr * 0.34) + 1, Y(hy + hr * 0.66) + 1, 5);
+        break;
+      case 'bear':
+      case 'ape':
+        if (k === 'ape') {
+          // 하트 모양 얼굴
+          E(hx - hr * 0.42, hy - hr * 0.05, hr * 0.38, hr * 0.42, 2);
+          E(hx + hr * 0.18, hy - hr * 0.05, hr * 0.38, hr * 0.42, 2);
+          E(hx - hr * 0.12, hy + hr * 0.38, hr * 0.55, hr * 0.38, 2);
+        } else E(hx - hr * 0.3, hy + hr * 0.42, hr * 0.46, hr * 0.32, 2);
+        E(hx - hr * 0.42, hy + hr * 0.26, hr * 0.2, hr * 0.13, 6);
+        break;
+      case 'boar':
+        E(hx - hr * 0.95, hy + hr * 0.32, hr * 0.3, hr * 0.36, 7);
+        g.set(X(hx - hr * 1.02), Y(hy + hr * 0.26), 8);
+        g.set(X(hx - hr * 0.86), Y(hy + hr * 0.26), 8);
+        break;
+      case 'rabbit':
+        E(hx - hr * 0.3, hy + hr * 0.4, hr * 0.32, hr * 0.24, 2);
+        E(hx - hr * 0.32, hy + hr * 0.22, hr * 0.12, hr * 0.09, 7);
+        break;
+      case 'sheep':
+        E(hx - hr * 0.22, hy + hr * 0.12, hr * 0.68, hr * 0.78, 2);
+        E(hx - hr * 0.34, hy + hr * 0.5, hr * 0.14, hr * 0.1, 7);
+        break;
+      case 'seal':
+        for (const d of [-1, 1]) E(hx - hr * 0.3 + d * hr * 0.24, hy + hr * 0.4, hr * 0.3, hr * 0.24, 2);
+        E(hx - hr * 0.3, hy + hr * 0.2, hr * 0.17, hr * 0.13, 6);
+        break;
+      case 'tapir':
+        Cv([[hx - hr * 0.6, hy + hr * 0.2], [hx - hr * 1.2, hy + hr * 0.35], [hx - hr * 1.35, hy + hr * 0.7]], hr * 0.45, hr * 0.3, 1);
+        break;
+      case 'mole':
+        P([[hx - hr * 0.5, hy + hr * 0.1], [hx - hr * 1.35, hy + hr * 0.42], [hx - hr * 0.5, hy + hr * 0.62]], 7);
+        E(hx - hr * 1.3, hy + hr * 0.42, hr * 0.14, hr * 0.14, 8);
+        break;
+      case 'rhino':
+        E(hx - hr * 0.7, hy + hr * 0.36, hr * 0.62, hr * 0.42, 1);
+        E(hx - hr * 0.68, hy + hr * 0.55, hr * 0.48, hr * 0.22, 2);
+        P([[hx - hr * 1.15, hy + hr * 0.05], [hx - hr * 1.45 - st, hy - hr * 0.7 - st * 1.5], [hx - hr * 0.8, hy - hr * 0.05]], 12);
+        break;
+      case 'frog':
+        E(hx - hr * 0.1, hy + hr * 0.45, hr * 1.0, hr * 0.32, 2);
+        break;
+      case 'lizard':
+      case 'turtle':
+        E(hx - hr * 0.62, hy + hr * 0.32, hr * 0.72, hr * 0.42, 1);
+        E(hx - hr * 0.6, hy + hr * 0.52, hr * 0.6, hr * 0.2, 2);
+        g.set(X(hx - hr * 1.2), Y(hy + hr * 0.15), 6);
+        break;
+      case 'owl':
+        for (const d of [-1, 1]) E(hx - hr * 0.12 + d * hr * 0.45, hy, hr * 0.46, hr * 0.48, 2);
+        break;
+    }
+  };
 
   // ---------- 뒤에 그릴 것 1: 날개·등 ----------
   const up = frame === 1 ? -2 : 0;
@@ -287,9 +436,9 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
 
   // ---------- 뒤에 그릴 것 2: 꼬리 ----------
   const tailPart = () => {
-    if (sp.body === 'fish' || sp.body === 'serpent' || sp.body === 'plant' || sp.body === 'ghost' || sp.body === 'rock' || sig.tail === 'none') return;
+    if (body === 'fish' || body === 'serpent' || body === 'plant' || body === 'ghost' || body === 'rock' || sig.tail === 'none') return;
     const [tx, ty] = tailRoot;
-    const L = (sp.body === 'dragon' ? 14 : 9) * (0.7 + st * 0.25);
+    const L = (body === 'dragon' ? 14 : 9) * (0.7 + st * 0.25);
     const sw = frame === 1 ? 1.2 : 0;
     switch (sig.tail) {
       case 'thin':
@@ -342,15 +491,26 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
         P([[tx, ty - 2], [tx + 9 + st * 2, ty - 10 - st * 2], [tx + 6, ty - 2], [tx + 11 + st * 2, ty + 2]], 3);
         break;
     }
-    if (sp.body === 'dragon') P([[tx - 2, ty - 5], [tx + 15, ty + 1], [tx + 19, ty - 3], [tx + 2, ty - 10]], 1);
+    if (body === 'dragon') P([[tx - 2, ty - 5], [tx + 15, ty + 1], [tx + 19, ty - 3], [tx + 2, ty - 10]], 1);
   };
 
+  let hx = 0;
+  let hy = 0;
+  let hr = 0;
+  let face = faceOf(kind, body, st);
+  const form = FORMS[sp.line];
+  if (form) {
+    const res = form({ E, P, Ln, Cv, B, set: (x: number, y: number, v: number) => g.set(X(x), Y(y), v), muzzle, get: (x: number, y: number) => g.get(Math.round(X(x)), Math.round(Y(y))), st, frame, up, has, r, s });
+    head = res.head;
+    if (res.body) body = res.body;
+    face = { ...faceOf(res.kind, res.body ?? body, st), ...res.face };
+  } else {
   if (sig.back && sig.back !== 'shell' && sig.back !== 'plates' && sig.back !== 'spikes' && sig.back !== 'cloud' && (st >= 2 || sig.back === 'fwing' || sig.back === 'iwing')) backPart();
   tailPart();
   if (sig.back === 'cloud' && st >= 2) backPart();
 
   // ---------- 몸 ----------
-  switch (sp.body) {
+  switch (body) {
     case 'blob':
       B(0, -13, 14, 12.5, 1);
       E(-6, -1.5, 4, 2.2, 1);
@@ -360,32 +520,46 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
       tailRoot = [11, -6];
       break;
     case 'quad': {
-      for (const lx of [-10, -4, 7, 12]) {
-        const backLeg = lx === -4 || lx === 12;
-        const lh = 4 + st * 0.8;
-        E(lx, -lh, 2.8, lh, backLeg ? 16 : 1);
-        E(lx - 0.6, -1, 3.2, 1.8, backLeg ? 16 : 1);
-      }
-      B(2, -13, 14, 8.5, 1);
-      B(0, -10, 10, 4.5, 2);
-      head = [-11, -22 * tall, 8.4 * headK];
-      neck = [-9, -16];
-      tailRoot = [14, -14];
+      // 뒤쪽 다리(진하게) → 몸통(가슴·엉덩이) → 앞쪽 다리
+      const lh = 4.5 + st * 0.9;
+      const leg = (lx: number, c: number, lift = 0) => {
+        E(lx, -lh - 1.5 - lift, 3.1, lh * 0.75 + 1.2, c);
+        E(lx - 0.9, -1.4 - lift, 3.3, 1.9, c);
+        g.set(X(lx - 2.4), Y(-0.6 - lift), 16);
+        g.set(X(lx - 0.6), Y(-0.6 - lift), 16);
+      };
+      leg(-4, 16, frame === 1 ? 0.5 : 0);
+      leg(13, 16);
+      B(5, -12.5 - st * 0.4, 10, 7.2, 1);
+      B(-5, -13.5 - st * 0.5, 9.5, 8, 1);
+      B(0, -9.5, 10.5, 3.6, 2);
+      leg(-9, 1);
+      leg(8, 1, frame === 1 ? 0.5 : 0);
+      E(-10, -19 - st * 0.6, 4.6, 5.6, 1, -0.4);
+      head = [-12.5, -24 * tall - st * 0.8, 8.4 * headK];
+      neck = [-10, -17];
+      tailRoot = [14, -15];
       break;
     }
     case 'biped': {
       const lg = 3 + st;
-      E(-5, -lg * 0.6, 4, lg * 0.7 + 1.5, 1);
-      E(5, -lg * 0.6, 4, lg * 0.7 + 1.5, 1);
-      E(-6, -0.8, 4.5, 1.8, 1);
-      E(6, -0.8, 4.5, 1.8, 1);
-      B(0, -13 - st, 9.5, 10.5, 1);
-      B(0, -11 - st, 6.5, 7.5, 2);
+      for (const k of [-1, 1]) {
+        E(k * 5, -lg * 0.7 - 1, 4.3, lg * 0.7 + 2, 1);
+        E(k * 5.6 - 1.2, -1, 5, 2, 1);
+        for (const t of [-1.6, 0.2]) g.set(X(k * 5.6 - 1.2 + t * 1.4 - 1.4), Y(-0.4), 16);
+      }
+      B(0, -12 - st, 10, 10, 1);
+      B(0, -18.5 - st, 8, 5.5, 1);
+      B(-0.5, -11 - st, 6.5, 7.5, 2);
       const arm = frame === 1 ? 1 : 0;
       const raise = final ? -4 : 0;
-      E(-10.5, -15 - st + arm + raise, 3.2, 6, 1, 0.45 + (final ? 0.5 : 0));
-      E(10.5, -15 - st - arm + raise, 3.2, 6, 1, -0.45 - (final ? 0.5 : 0));
-      head = [0, -28 * tall - st, 9.5 * headK];
+      for (const k of [-1, 1]) {
+        const ax = k * 11;
+        const ay = -15 - st + (k === -1 ? arm : -arm) + raise;
+        E(ax, ay, 3.2, 5.8, 1, k * -(0.45 + (final ? 0.5 : 0)));
+        E(ax + k * (final ? 2.2 : 0.6), ay + (final ? -4 : 4.6), 3, 2.8, 1);
+      }
+      head = [0, -28 * tall - st * 1.4, 9.5 * headK];
       neck = [0, -22];
       tailRoot = [8, -8];
       break;
@@ -489,7 +663,7 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
   }
   if (sig.back === 'shell' || sig.back === 'plates' || sig.back === 'spikes') if (st >= 2 || sig.back !== 'spikes') backPart();
 
-  let [hx, hy, hr] = head;
+  [hx, hy, hr] = head;
   // ---------- 갈기 (머리 뒤) ----------
   if (sig.mane && st >= 2) {
     const mr = hr + 3 + st;
@@ -506,12 +680,18 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
     }
   }
   // 머리 그리기 (몸에 따라 이미 그린 경우 제외)
-  if (sp.body === 'quad' || sp.body === 'biped' || sp.body === 'bird' || sp.body === 'dragon') E(hx, hy, hr, hr * 0.93, 1);
-  if (sp.body === 'quad') {
-    E(hx - hr * 0.62, hy + hr * 0.3, hr * 0.42, hr * 0.34, 2);
-    g.set(X(hx - hr * 0.98), Y(hy + hr * 0.2), 6);
+  const headed = body === 'quad' || body === 'biped' || body === 'bird' || body === 'dragon';
+  face = faceOf(kind, body, st);
+  if (headed || kind) {
+    if (kind === 'frog') {
+      E(hx, hy + hr * 0.1, hr * 1.22, hr * 0.78, 1);
+      for (const k of [-1, 1]) E(hx + k * hr * 0.5 - hr * 0.12, hy - hr * 0.55, hr * 0.42, hr * 0.38, 1);
+    } else if (kind === 'turtle' || kind === 'lizard') E(hx, hy, hr * 1.02, hr * 0.84, 1);
+    else if (headed) E(hx, hy, hr, hr * 0.93, 1);
+    muzzle(kind, hx, hy, hr);
   }
-  if (sp.body === 'bird' || sig.face === 'beak') P([[hx - hr * 0.7, hy - 1], [hx - hr * 1.6 - st, hy + 1], [hx - hr * 0.7, hy + 3]], 12);
+  if ((body === 'bird' && kind !== 'owl') || sig.face === 'beak') P([[hx - hr * 0.7, hy - 1], [hx - hr * 1.6 - st, hy + 1], [hx - hr * 0.7, hy + 3]], 12);
+  if (kind === 'owl') P([[hx - 1.6, hy + hr * 0.2], [hx - 0.2, hy + hr * 0.75], [hx + 1.2, hy + hr * 0.2]], 12);
 
   // ---------- 귀 ----------
   const ex = hx;
@@ -654,10 +834,10 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
     }
   }
   // ---------- 팔 ----------
-  if (sig.arm && st >= 2 && (sp.body === 'biped' || sp.body === 'dragon' || sp.body === 'bug')) {
-    const ay = sp.body === 'bug' ? -9 : -11 - st + (final ? -5 : 0);
+  if (sig.arm && st >= 2 && (body === 'biped' || body === 'dragon' || body === 'bug')) {
+    const ay = body === 'bug' ? -9 : -11 - st + (final ? -5 : 0);
     for (const side of [-1, 1]) {
-      const ax = side * (sp.body === 'bug' ? 3 : 12.5);
+      const ax = side * (body === 'bug' ? 3 : 12.5);
       if (sig.arm === 'claw') for (let i = 0; i < 3; i++) Ln(ax + side * (i - 1) * 1.2, ay, ax + side * (i - 1) * 1.6, ay + 2.6, 0.8, 9);
       else if (sig.arm === 'blade') P([[ax, ay - 2], [ax + side * 7 * (st - 1), ay - 10 - st * 2], [ax + side * 2, ay + 1]], 9);
       else if (sig.arm === 'fist') E(ax, ay + 1, 3.4 + st * 0.4, 3.4 + st * 0.4, 3);
@@ -671,8 +851,8 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
     switch (sig.acc) {
       case 'club': {
         // 도깨비 방망이
-        const cx = sp.body === 'quad' ? 16 : 13;
-        const cy = sp.body === 'quad' ? -22 : -12 - st;
+        const cx = body === 'quad' ? 16 : 13;
+        const cy = body === 'quad' ? -22 : -12 - st;
         const L = 6 + st * 2.4;
         Ln(cx, cy + 4, cx + 2, cy - L, 1.6 + st * 0.3, 11);
         E(cx + 2.4, cy - L - 1, 2.4 + st * 0.6, 3.4 + st * 0.7, 11);
@@ -708,6 +888,7 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
     }
   }
 
+  }
   // ---------- 3단계 장식: 테두리색 줄과 반짝임 ----------
   if (final) {
     // 몸 아랫단에 장식색 테
@@ -726,14 +907,14 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
   hy = head[1];
   hr = head[2];
   if (!back) {
-    const eyeR = (st === 1 ? 3.3 : st === 2 ? 2.8 : 2.4) * (sp.body === 'ghost' || sp.body === 'blob' ? 1.2 : 1);
-    const sep = hr * 0.45;
-    const ey2 = hy + hr * 0.02;
-    const fierce = final && (has('dragon') || has('dark') || has('fight') || sp.base[1] > sp.base[3] + 10);
+    const eyeR = (st === 1 ? 3.3 : st === 2 ? 2.8 : 2.4) * (body === 'ghost' || body === 'blob' ? 1.2 : 1) * face.eyeK;
+    const sep = hr * face.sep;
+    const ey2 = hy + hr * face.ey;
+    const fierce = !face.calm && final && (has('dragon') || has('dark') || has('fight') || sp.base[1] > sp.base[3] + 10);
     const blink = frame === 2;
-    const fish = sp.body === 'fish';
+    const fish = body === 'fish';
     for (const k of fish ? [-1] : [-1, 1]) {
-      const ex2 = fish ? hx - 0.5 : hx + k * sep - hr * 0.12;
+      const ex2 = fish ? hx - 0.5 : hx + k * sep - hr * face.shift;
       const far = k === 1;
       const rr = eyeR * (far ? 0.88 : 1) * s * (fish ? 1.25 : 1);
       const cx = X(ex2);
@@ -759,14 +940,20 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
       if (fierce) g.line(cx + k * rr * 1.05, cy - rr * 1.6, cx - k * rr * 0.9, cy - rr * 0.55, 1, 6);
     }
     // 볼
-    if (st < 3 && sp.body !== 'rock' && sp.body !== 'fish') {
+    if (st < 3 && face.blush && body !== 'rock' && body !== 'fish') {
       g.ellipse(X(hx - sep - 2.6), Y(ey2 + 3.4), 1.5, 1, 7);
       g.ellipse(X(hx + sep + 2), Y(ey2 + 3.4), 1.3, 0.9, 7);
     }
     // 입 (만화풍: 웃는 입 / 송곳니)
-    const my = ey2 + hr * (fish ? 0.55 : 0.46);
-    const mx = fish ? hx - hr * 0.95 : hx - hr * 0.12;
-    if (final && fierce) {
+    const my = fish ? ey2 + hr * 0.55 : hy + hr * face.my;
+    const mx = fish ? hx - hr * 0.95 : hx - hr * face.mx;
+    if (face.mouth === 'wide') {
+      // 개구리·도마뱀: 얼굴을 가로지르는 큰 입
+      g.line(X(mx - hr * 0.7), Y(my), X(mx + hr * 0.55), Y(my + 0.6), 1, 6);
+      if (st === 1) g.ellipse(X(mx - hr * 0.1), Y(my + 1.2), 1.6, 0.9, 8);
+    } else if (face.mouth === 'beak' || face.mouth === 'none') {
+      /* 부리가 입 */
+    } else if (final && fierce) {
       g.line(X(mx - 3), Y(my), X(mx + 3), Y(my), 1.2, 8);
       g.set(X(mx - 2), Y(my) - 1, 5);
       g.set(X(mx + 2), Y(my) - 1, 5);
@@ -779,7 +966,7 @@ function paint(sp: Species, back: boolean, frame: number, fit = 1): Grid {
     } else {
       g.ellipse(X(mx), Y(my + 0.6), 1.6, 1.1, 8);
     }
-    switch (sig.face) {
+    if (!form) switch (sig.face) {
       case 'whisker':
         if (fish) for (const d of [0, 2]) g.line(X(mx), Y(my), X(mx - 3 - d), Y(my + 4 + st + d), 0.8, 4);
         else for (const k of [-1, 1]) for (const dy of [-0.8, 0.8]) g.line(X(hx + k * hr * 0.72), Y(my - 1 + dy), X(hx + k * hr * 1.3), Y(my - 2 + dy * 2.2), 0.7, 6);
