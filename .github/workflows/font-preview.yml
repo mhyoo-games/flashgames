@@ -2,37 +2,19 @@ name: font-preview
 on:
   push:
     branches: [font-preview]
+permissions:
+  contents: write
 jobs:
-  shot:
+  build:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund && npx vite build
-      - run: ls node_modules/galmuri/dist | head -30
-      - run: pip install playwright && python -m playwright install --with-deps chromium
+      - run: npm install --no-audit --no-fund
       - run: |
-          (cd dist && python -m http.server 8099 &) ; sleep 2
-          cat > shot.py <<'P'
-          from playwright.sync_api import sync_playwright
-          with sync_playwright() as p:
-              b=p.chromium.launch(); pg=b.new_page(viewport={'width':1100,'height':800})
-              pg.goto('http://127.0.0.1:8099/#/kkaebi'); pg.wait_for_timeout(2500)
-              pg.screenshot(path='s0.png')
-              pg.get_by_text('새로 시작').click(force=True); pg.wait_for_timeout(1800)
-              pg.screenshot(path='s1.png')
-              pg.keyboard.press('KeyZ'); pg.wait_for_timeout(300); pg.keyboard.press('KeyZ'); pg.wait_for_timeout(300)
-              pg.keyboard.press('KeyZ'); pg.wait_for_timeout(1500)
-              pg.screenshot(path='s2.png')
-              pg.keyboard.press('KeyX'); pg.wait_for_timeout(800)
-              pg.screenshot(path='s3.png')
-              print(pg.evaluate("document.fonts.check('12px Galmuri11','가')"))
-              b.close()
-          P
-          python shot.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: shots
-          path: s*.png
+          mkdir -p /tmp/out && cp node_modules/galmuri/dist/galmuri.css node_modules/galmuri/dist/*.woff2 /tmp/out/
+          cd /tmp/out && git init -q -b font-assets && git add -A
+          git -c user.name=ci -c user.email=ci@local commit -qm fonts
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" font-assets
