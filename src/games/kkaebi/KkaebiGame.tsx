@@ -5,11 +5,11 @@ import { random, seeded } from '../../core/rng';
 import { load, save } from '../../core/storage';
 import { Shell, useLoop } from '../../ui/common';
 import { Fight, type Action, type Ev } from './battle';
-import { interact, push, resetTemp, trainerFlag, useField, walk, type Ask } from './field';
+import { interact, push, resetTemp, tile, trainerFlag, useField, walk, type Ask } from './field';
 import { ITEMS } from './items';
 import { josa } from './josa';
-import { gymReward, MAP_ORDER_FLY, MAPS, rivalOf, rivalTeam } from './maps';
-import { canEvolve, canLearnTm, evolve, expAt, healMon, makeMon, maxHp, nameOf, sp, teach, type Mon } from './mon';
+import { gymReward, MAP_ORDER_FLY, MAPS, rivalOf, rivalTeam, TRAITS } from './maps';
+import { addBond, canBondEvolve, canEvolve, canLearnTm, evolve, expAt, healMon, makeMon, maxHp, nameOf, sp, teach, type Mon } from './mon';
 import { HMS, MOVES, TMS } from './moves';
 import { banner, box, dialog, H, renderBattle, renderField, text, W, wrapText, type BattleAnim, type FieldView } from './render';
 import { byNo, SPECIES, STARTERS } from './species';
@@ -307,6 +307,7 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
     const foe = makeMon(no, lv, rng);
     if (!s.seen.includes(no)) s.seen.push(no);
     const fight = new Fight(s.party, [foe], rng);
+    fight.heroName = s.name;
     const me = fight.me;
     battle.current = { fight, a: { ...newAnim(me, foe), fin: 1 }, evq: [{ t: 'msg', s: `앗! 야생의 ${sp(foe).name}${foe.shiny ? '(반짝!)' : ''}이(가) 나타났다!` }, { t: 'msg', s: `가랏! ${nameOf(me)}!` }, { t: 'anim', side: 'p', kind: 'send' }], msg: '', wait: 0, hold: false, phase: 'events', pIdx: fight.p, fIdx: 0, hpTarget: { p: me.hp, f: foe.hp }, legendFlag, terrain: terrainOf(), intro: 0, leveled: new Set(), wild: true };
     battle.current.wait = 0.95;
@@ -322,6 +323,7 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
     const foes = teamList.map(([no, lv]) => makeMon(no, lv, rng));
     for (const f of foes.slice(0, 1)) if (!s.seen.includes(f.no)) s.seen.push(f.no);
     const fight = new Fight(s.party, foes, rng, { name: tr.name, smart: tr.smart, items: tr.items, prize: tr.prize });
+    fight.heroName = s.name;
     const me = fight.me;
     const big = !!(tr.gym || tr.rival || /사천왕|깨비 왕|두목|간부/.test(tr.name));
     battle.current = {
@@ -438,6 +440,23 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
       const tr = r.trainer.trainer!;
       if (tr.gym) queue.current.unshift(...gymReward(tr.gym));
       else if (r.trainer.talk) queue.current.unshift(...r.trainer.talk(s));
+    }
+    if (f.outcome === 'win' || f.outcome === 'caught') {
+      // 함께 싸우면 유대가 깊어진다 (체육관·라이벌은 더)
+      const big = !!(r.trainer?.trainer?.gym || r.trainer?.trainer?.rival);
+      for (const m of s.party) if (m.hp > 0) addBond(m, big ? 4 : 1);
+      // 숨은 유대 진화
+      for (const m of s.party)
+        if (canBondEvolve(m)) {
+          const before = nameOf(m);
+          m.bondForm = true;
+          sound.sfx('clear');
+          queue.current.push(
+            { who: '', say: `……!? ${before}의 몸이 ${s.name}의 마음에 답하듯 금빛으로 빛난다!` },
+            { who: '', say: `유대가 하늘에 닿았다! ${before}은(는) 숨겨진 모습, ${nameOf(m)}(으)로 바뀌었다!` },
+            { who: '', say: '(유대 진화: 모든 능력이 크게 올랐다)' },
+          );
+        }
     }
     // 진화
     evoQueue.current = [...r.leveled].filter((i) => s.party[i] && s.party[i].hp > 0 && canEvolve(s.party[i]));
@@ -611,12 +630,16 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
             onEnterMap(prevMap);
           } else {
             v.moving = true;
+            if (s.steps % 80 === 0) {
+              const lead = s.party.find((p) => p.hp > 0);
+              if (lead) addBond(lead, 1);
+            }
             const running = held.current.has('run') || held.current.has('cancel');
             walkAnim.current = {
               fx,
               fy,
               t: 0,
-              dur: res.jump ? 0.34 : running && !s.surfing ? 0.11 : 0.19,
+              dur: res.jump ? 0.34 : s.biking ? 0.08 : running && !s.surfing ? 0.11 : 0.19,
               jump: !!res.jump,
               after: () => {
                 if (res.jump) sound.sfx('jump');
@@ -650,7 +673,7 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
     if (!ctx) return;
     const tod = s.forceTime ?? timeOfDay();
     renderField(ctx, s, map(), v, time.current, tod);
-    banner(ctx, ban.current.name, ban.current.t);
+    banner(ctx, ban.current.name, ban.current.t, TRAITS[s.map]);
     if (map().terrain !== 'indoor') {
       box(ctx, W - 132, 12, 120, 44);
       text(ctx, `${TIME_NAME[tod]} ${new Date().getHours()}시`, W - 72, 24, 18, '#202030', 'center');
@@ -1200,6 +1223,32 @@ function Play({ initial, onTitle }: { initial: GameState; onTitle: () => void })
       s.repel = 100;
       setOverlay(null);
       say('', '쑥향을 피웠다! 한동안 약한 깨비가 다가오지 않는다.');
+      return runQueue();
+    }
+    if (id === 'bike') {
+      const m = map();
+      if (s.surfing || m.terrain === 'indoor' || m.terrain === 'cave' || m.terrain === 'tower') return setNote('여기서는 두바퀴를 탈 수 없다.');
+      s.biking = !s.biking;
+      setOverlay(null);
+      sound.sfx(s.biking ? 'jump' : 'click');
+      say('', s.biking ? `${s.name}은(는) 두바퀴에 올라탔다! 씽씽~` : '두바퀴에서 내렸다.');
+      return runQueue();
+    }
+    if (id === 'rod') {
+      const m = map();
+      const [dx, dy] = ({ up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] } as const)[s.dir];
+      if (tile(m, s.x + dx, s.y + dy) !== '~' || !m.water?.length) return setNote('물가를 바라보고 써야 한다.');
+      setOverlay(null);
+      const now = s.forceTime ?? timeOfDay();
+      const list = m.water.filter((e) => !e.time || e.time === now);
+      queue.current.push({ who: '', say: '낚싯대를 드리웠다…… 찌가 살랑살랑……' });
+      if (!list.length || rng() < 0.3) queue.current.push({ who: '', say: '아무것도 걸리지 않았다.' });
+      else {
+        let w = rng() * list.reduce((a, e) => a + e.w, 0);
+        const e = list.find((x) => (w -= x.w) < 0) ?? list[0];
+        sound.sfx('special');
+        queue.current.push({ who: '', say: '앗! 무언가 걸렸다!' }, { wild: e.no, lv: e.min + Math.floor(rng() * (e.max - e.min + 1)) });
+      }
       return runQueue();
     }
     if (it.kind === 'ball' || it.kind === 'key') return setNote(it.desc);

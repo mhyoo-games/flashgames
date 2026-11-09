@@ -70,6 +70,7 @@ export function walk(s: GameState, maps: Record<string, MapDef>, dir: Dir, rng: 
     if (w.dir) s.dir = w.dir;
     // 실내로 들어가면 파도타기 끝
     if (maps[w.to].terrain === 'indoor') s.surfing = false;
+    if (maps[w.to].terrain === 'indoor' || maps[w.to].terrain === 'cave') s.biking = false;
     else if (s.surfing && tile(maps[w.to], s.x, s.y) !== '~') s.surfing = false;
     resetTemp();
     return { moved: true, warp: true };

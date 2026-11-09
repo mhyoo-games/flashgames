@@ -231,3 +231,23 @@ test('생김새: 계열마다 특징이 있고, 3단계는 더 화려하다', as
   // 최종 진화형끼리 특징 조합이 겹치지 않는다
   assert.equal(seen.size, SPECIES.filter((x) => x.stage === 3 && !x.legend).length);
 });
+
+test('유대: 높으면 쓰러질 공격을 한 번 버티고, 유대 진화는 능력이 오른다', async () => {
+  const { canBondEvolve, BOND_GUARD } = await import('../src/games/kkaebi/mon.ts');
+  const rng = seeded(7);
+  const me = makeMon(1, 5, rng);
+  me.bond = BOND_GUARD;
+  me.hp = 2;
+  const foe = makeMon(87, 60, rng);
+  const f = new Fight([me], [foe], rng);
+  f.heroName = '하랑';
+  const ev = f.turn({ kind: 'move', slot: 0 });
+  assert.ok(ev.some((e) => e.t === 'msg' && e.s.includes('감쌌다')), '유대로 막아 주지 않음');
+  const strong = makeMon(3, 50, rng);
+  const atk = statOf(strong, 1);
+  strong.bond = 255;
+  assert.ok(canBondEvolve(strong));
+  strong.bondForm = true;
+  assert.ok(statOf(strong, 1) > atk);
+  assert.ok(!canBondEvolve(strong));
+});

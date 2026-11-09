@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { sound } from '../../core/audio';
-import { expAt, maxHp, nameOf, sp, statOf, type Mon } from './mon';
+import { bondLabel, expAt, maxHp, nameOf, sp, statOf, type Mon } from './mon';
 import { josa } from './josa';
 import { MOVES, STATUS_NAME } from './moves';
 import { SPECIES } from './species';
@@ -168,6 +168,7 @@ export function StatusView({ m, onClose }: { m: Mon; onClose: () => void }) {
           <h3>
             No.{String(s.no).padStart(3, '0')} {nameOf(m)} <small>Lv {m.lv}</small>
           </h3>
+          <p className="kbond">유대 {bondLabel(m.bond)}</p>
           <p>
             {s.types.map((t) => (
               <TypeTag key={t} t={t} />

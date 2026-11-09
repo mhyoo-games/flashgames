@@ -486,6 +486,22 @@ export function renderField(ctx: Ctx, s: GameState, m: MapDef, v: FieldView, tim
         ctx.ellipse(hx - 4, hy - 11, 15, 6, 0, 0, Math.PI * 2);
         ctx.fill();
       } else shadow(ctx, hx, hy + v.hop);
+      if (s.biking && !s.surfing) {
+        // 두바퀴: 바퀴 두 개와 몸체
+        const side = v.dir === 'left' || v.dir === 'right';
+        const spin = Math.floor(time * 12) % 2;
+        ctx.fillStyle = '#303048';
+        for (const k of side ? [-1, 1] : [0]) {
+          ctx.beginPath();
+          ctx.arc(hx + k * 14, hy - 6, side ? 9 : 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = spin ? '#a8a8c0' : '#d8d8e8';
+          ctx.fillRect(hx + k * 14 - 2, hy - 8, 4, 4);
+          ctx.fillStyle = '#303048';
+        }
+        ctx.fillStyle = '#e84a4a';
+        ctx.fillRect(hx - (side ? 14 : 3), hy - 14, side ? 28 : 6, 5);
+      }
       // 한 칸 걷는 동안 가운데쯤에서 발을 내딛고 살짝 들썩인다
       const frac = Math.abs((v.px % 1) + (v.py % 1)) % 1;
       const stepping = frac > 0.2 && frac < 0.8;
@@ -572,11 +588,15 @@ export function wrapText(ctx: Ctx, s: string, x: number, y: number, maxW: number
   lines.slice(-maxLines).forEach((l, i) => text(ctx, l, x, y + i * lh, size, color));
 }
 
-export function banner(ctx: Ctx, name: string, t: number) {
-  if (t > 2.2) return;
-  ctx.globalAlpha = Math.min(1, (2.2 - t) * 2);
-  box(ctx, 16, 16, 300, 58);
-  text(ctx, name, 166, 34, 22, '#202030', 'center');
+export function banner(ctx: Ctx, name: string, t: number, sub?: string) {
+  if (t > (sub ? 3 : 2.2)) return;
+  const end = sub ? 3 : 2.2;
+  ctx.globalAlpha = Math.min(1, (end - t) * 2);
+  const slide = Math.min(0, (t - 0.25) * 400);
+  const w = sub ? 380 : 300;
+  box(ctx, 16 + slide, 16, w, sub ? 86 : 58);
+  text(ctx, name, 16 + w / 2 + slide, 32, 24, '#202030', 'center');
+  if (sub) text(ctx, sub, 16 + w / 2 + slide, 64, 18, '#a04818', 'center');
   ctx.globalAlpha = 1;
 }
 
@@ -618,6 +638,18 @@ function popScale(t: number) {
 }
 /** 숨쉬기·깜빡임 */
 const frameAt = (time: number, off: number) => ((time + off) % 3.4 < 0.13 ? 2 : Math.floor((time + off) * 1.6) % 2);
+/** 유대 진화한 깨비: 금빛 기운 */
+function bondAura(ctx: Ctx, s: Species, x: number, y: number, scale: number, time: number, back: boolean) {
+  ctx.save();
+  ctx.globalAlpha = 0.45 + Math.sin(time * 4) * 0.2;
+  drawKkaebi(ctx, tinted(s, '#ffd23a', back), x, y + 4, scale * 1.12, false, 1);
+  ctx.restore();
+  for (let i = 0; i < 6; i++) {
+    const a = time * 1.5 + i;
+    ctx.fillStyle = i % 2 ? '#fff6b0' : '#ffd23a';
+    ctx.fillRect(Math.round(x + Math.cos(a) * 70 * (scale / 4)), Math.round(y - 60 - ((time * 40 + i * 25) % 110)), 4, 4);
+  }
+}
 function whiteOver(ctx: Ctx, s: Species, x: number, y: number, scale: number, alpha: number, squash: number, back = false) {
   ctx.save();
   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
@@ -690,6 +722,7 @@ export function renderBattle(ctx: Ctx, me: Mon | undefined, foe: Mon, a: BattleA
       const x = FX + sh + lunge + fOff;
       // 야생: 미끄러져 들어오는 동안은 그림자, 멈추면 번쩍하며 색이 돌아온다
       const cv = wild && introT < 1 ? silhouette(s) : kkaebiSprite(s, false, frameAt(time, 0.3), foe.shiny);
+      if (foe.bondForm) bondAura(ctx, s, x, FY + 10, scale, time, false);
       drawKkaebi(ctx, cv, x, FY + 10, scale, false, 1 + bob);
       const glow = wild ? Math.max(0, 1 - Math.abs(introT - 1.05) / 0.12) * (introT >= 1 ? 1 : 0) : 0;
       if (glow > 0 || a.fsend < 0.5) whiteOver(ctx, s, x, FY + 10, scale, Math.max(glow, 1 - a.fsend * 2), 1 + bob);
@@ -706,6 +739,7 @@ export function renderBattle(ctx: Ctx, me: Mon | undefined, foe: Mon, a: BattleA
     const bob = Math.sin(time * 2.6 + 1.7) * 0.022;
     const x = PX + sh + lunge + pOff;
     const y = PY + 28 + (1 - a.pin) * 120;
+    if (vis && me.bondForm) bondAura(ctx, s, x, y, sc, time, true);
     if (vis) drawKkaebi(ctx, kkaebiSprite(s, true, frameAt(time, 1.1), me.shiny), x, y, sc, false, 1 + bob);
     if (vis && a.psend < 0.5) whiteOver(ctx, s, x, y, sc, 1 - a.psend * 2, 1 + bob, true);
     if (a.psend < 0.7) burst(ctx, x, y - 120, a.psend);

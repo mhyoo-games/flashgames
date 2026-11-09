@@ -288,7 +288,18 @@ solnae.path([[12, 15], [12, 8], [2, 8], [0, 8]], '=', 2).path([[12, 8], [12, 6]]
 solnae.def.fly = [12, 10];
 center(solnae, 4, 3);
 shop(solnae, 15, 3);
-house(solnae, 15, 11, (b) => b.npc(npc(4, 3, 'old', '솔내 할아버지', (s) => (s.flags.giftRepel ? say('솔내 할아버지', '쑥향은 수풀이 귀찮을 때 쓰렴.') : [{ who: '솔내 할아버지', say: '여행을 떠나는구나. 이걸 가져가거라.' }, { give: 'repel', n: 3 }, { set: 'giftRepel' }, { who: '', say: '쑥향 3개를 받았다!' }]))));
+house(solnae, 15, 11, (b) =>
+  b
+    .npc(
+      npc(2, 4, 'kid', '두바퀴 형', (s) =>
+        s.flags.giftBike
+          ? say('두바퀴 형', '두바퀴는 가방에서 꺼내 타. 굴이나 집 안에선 못 타!')
+          : s.badges < 1
+            ? say('두바퀴 형', '체육관 인장을 하나 받아 오면 내 두바퀴를 빌려줄게. 엄청 빠르다고!')
+            : [{ who: '두바퀴 형', say: '와, 인장이다! 약속대로 이거 가져가.' }, { give: 'bike' }, { set: 'giftBike' }, { who: '', say: '두바퀴를 받았다! 가방에서 꺼내 탈 수 있다.' }],
+      ),
+    )
+    .npc(npc(4, 3, 'old', '솔내 할아버지', (s) => (s.flags.giftRepel && s.flags.giftRod ? say('솔내 할아버지', '쑥향은 수풀이 귀찮을 때 쓰렴. 낚시는 물가에서!') : s.flags.giftRepel ? [{ give: 'rod' }, { set: 'giftRod' }, { who: '', say: '대나무 낚싯대를 받았다!' }] : [{ who: '솔내 할아버지', say: '여행을 떠나는구나. 이걸 가져가거라.' }, { give: 'repel', n: 3 }, { set: 'giftRepel' }, { give: 'rod' }, { set: 'giftRod' }, { who: '', say: '쑥향 3개와 대나무 낚싯대를 받았다!' }, { who: '솔내 할아버지', say: '낚싯대는 물가를 바라보고 가방에서 쓰면 된다. 물속 깨비가 걸릴 게야.' }]))));
 solnae.sign(9, 9, '솔내마을 ← 2번길');
 solnae.npc(npc(6, 11, 'lass', '아가씨', () => say('아가씨', '쉼터(파란 지붕)에서 깨비를 공짜로 쉬게 해 줘. 잡화점(노란 지붕)에선 호리병을 팔아!'), { turn: true }));
 link(r1, 'north', 12, solnae, 12);
@@ -724,4 +735,29 @@ champRoom.b.def.warps = [];
 // ---------------- 완성 ----------------
 for (const [id, b] of Object.entries(builders)) maps[id] = b.build();
 export const MAPS = maps;
+/** 마을·사냥터마다 한 줄 소개 (들어갈 때 이름 아래에 뜬다) */
+export const TRAITS: Record<string, string> = {
+  saessak: '새싹이 움트는 첫 마을',
+  r1: '참새콩·애벌콩이 노니는 풀길',
+  solnae: '두바퀴와 낚시의 마을',
+  r2: '밤이면 그림자콩이 나온다',
+  forest: '벌레 깨비 천국 · 밤엔 반디콩',
+  ikki: '이끼 낀 탑과 오래된 전설',
+  r3: '턱을 뛰어넘는 언덕길',
+  beongae: '번개 치는 항구 · 낚시 명소',
+  r4: '바위 깨비가 굴러다닌다',
+  cave1: '깜깜한 굴 · 빛내기가 필요',
+  bawi: '돌과 쇠의 장인 마을',
+  r5: '바람 부는 들 · 새 깨비가 많다',
+  mul: '물안개 낀 큰 도시',
+  sea6: '파도타기로 건너는 바다',
+  geum: '그믐밤의 마을 · 유령 깨비',
+  gforest: '그믐밤에만 울리는 방울 소리',
+  bul: '화산섬 · 불 깨비의 고향',
+  nun: '눈꽃 덮인 섬 · 얼음 깨비',
+  whirl: '바다의 주인이 잠든 동굴',
+  yong: '용이 하늘로 오른 섬',
+  vic: '리그로 가는 마지막 시험',
+};
+
 export const MAP_ORDER_FLY = ['saessak', 'solnae', 'ikki', 'beongae', 'bawi', 'mul', 'geum', 'bul', 'nun', 'yong'];

@@ -24,10 +24,14 @@ export interface Mon {
   shiny?: boolean;
   /** 잡은 호리병 */
   ball?: string;
+  /** 트레이너와의 유대 0~255 */
+  bond?: number;
+  /** 숨은 유대 진화를 했다 (능력치 15% 상승) */
+  bondForm?: boolean;
 }
 
 export const sp = (m: Mon): Species => byNo(m.no);
-export const nameOf = (m: Mon) => m.nick ?? sp(m).name;
+export const nameOf = (m: Mon) => m.nick ?? (m.bondForm ? '유대 ' : '') + sp(m).name;
 
 /** 레벨³ 경험치 곡선 */
 export const expAt = (lv: number) => (lv <= 1 ? 0 : lv * lv * lv);
@@ -35,8 +39,21 @@ export const expAt = (lv: number) => (lv <= 1 ? 0 : lv * lv * lv);
 export function statOf(m: Mon, i: number): number {
   const b = sp(m).base[i];
   const core = Math.floor(((b + m.iv[i]) * 2 * m.lv) / 100);
-  return i === 0 ? core + m.lv + 10 : core + 5;
+  const v = i === 0 ? core + m.lv + 10 : core + 5;
+  return m.bondForm && i > 0 ? Math.floor(v * 1.15) : v;
 }
+
+export const BOND_MAX = 255;
+/** 유대가 이만큼이면 한 전투에 한 번 트레이너가 쓰러질 공격을 막아 준다 */
+export const BOND_GUARD = 150;
+/** 유대 진화: 처음 고른 세 마리의 마지막 모습이 유대 220 이상, 레벨 40 이상에서 전투에 이기면 */
+export const BOND_EVO = 220;
+export const BOND_SPECIES = [3, 6, 9];
+export function addBond(m: Mon, n: number) {
+  m.bond = Math.max(0, Math.min(BOND_MAX, (m.bond ?? 70) + n));
+}
+export const canBondEvolve = (m: Mon) => !m.bondForm && BOND_SPECIES.includes(m.no) && (m.bond ?? 0) >= BOND_EVO && m.lv >= 40 && m.hp > 0;
+export const bondLabel = (b = 70) => (b >= 220 ? '♥♥♥♥♥ 마음이 하나' : b >= 150 ? '♥♥♥♥ 굳게 믿고 있다' : b >= 100 ? '♥♥♥ 잘 따른다' : b >= 60 ? '♥♥ 조금 친해졌다' : '♥ 아직 서먹하다');
 export const maxHp = (m: Mon) => statOf(m, 0);
 
 /** 이 레벨까지 배우는 기술 중 마지막 4개 */
@@ -76,6 +93,7 @@ export function gainExp(m: Mon, n: number): LevelResult {
   while (m.lv < MAX_LV && m.exp >= expAt(m.lv + 1)) {
     const before = maxHp(m);
     m.lv++;
+    addBond(m, 3);
     if (m.hp > 0) m.hp += maxHp(m) - before;
     res.levels.push(m.lv);
     for (const [l, id] of sp(m).learn) {

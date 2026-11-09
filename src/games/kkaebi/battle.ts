@@ -1,7 +1,7 @@
 // 깨비 전투 규칙 (1:1 교대). 화면과 분리되어 있어 Node로 시험할 수 있다.
 import type { Rng } from '../../core/rng.ts';
 import { ITEMS } from './items.ts';
-import { gainExp, maxHp, nameOf, sp, statOf, type Mon } from './mon.ts';
+import { BOND_GUARD, gainExp, maxHp, nameOf, sp, statOf, type Mon } from './mon.ts';
 import { MOVES, STAT_NAME, STATUS_NAME, type MoveDef, type Stat, type Status } from './moves.ts';
 import { effectiveness, type Type } from './types.ts';
 
@@ -54,6 +54,9 @@ export class Fight {
   private readonly rng: Rng;
   turnNo = 0;
 
+  /** 유대로 한 번 지켜 준 깨비 */
+  guarded = new Set<Mon>();
+  heroName = '트레이너';
   constructor(party: Mon[], foes: Mon[], rng: Rng, trainer?: TrainerInfo) {
     this.party = party;
     this.foes = foes;
@@ -231,6 +234,12 @@ export class Fight {
           crit ||= r.crit;
         }
         dmg = Math.min(dmg, target.hp);
+        // 유대: 쓰러질 공격을 한 전투에 한 번 트레이너가 막아 준다
+        if (tside === 'p' && dmg >= target.hp && target.hp > 1 && (target.bond ?? 0) >= BOND_GUARD && !this.guarded.has(target)) {
+          this.guarded.add(target);
+          dmg = target.hp - 1;
+          ev.push({ t: 'msg', s: `${this.heroName}이(가) 몸을 던져 ${nameOf(target)}을(를) 감쌌다! (유대)` });
+        }
         target.hp -= dmg;
         total += dmg;
         ev.push({ t: 'anim', side: tside, kind: 'hit' }, { t: 'hp', side: tside, hp: target.hp, max: maxHp(target) });

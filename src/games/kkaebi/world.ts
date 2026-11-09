@@ -44,7 +44,7 @@ export type Step =
   | { hm: string }
   | { tm: string }
   | { money: number }
-  | { wild: number; lv: number; flag: string }
+  | { wild: number; lv: number; flag?: string }
   | { warp: [string, number, number] }
   | { ending: true }
   | { home: true };
@@ -242,6 +242,8 @@ export interface GameState {
   seen: number[];
   caught: number[];
   surfing: boolean;
+  /** 두바퀴(자전거)를 타고 있다 */
+  biking?: boolean;
   repel: number;
   steps: number;
   home: [string, number, number];

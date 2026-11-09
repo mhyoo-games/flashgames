@@ -30,5 +30,7 @@ export const ITEMS: Record<string, ItemDef> = {
   ether: { id: 'ether', name: '기운차', price: 1200, kind: 'pp', desc: '기술 하나의 PP를 10 채운다.' },
   candy: { id: 'candy', name: '이상한 엿', price: 4800, kind: 'candy', desc: '먹으면 레벨이 1 오른다.' },
   repel: { id: 'repel', name: '쑥향', price: 350, kind: 'repel', desc: '100걸음 동안 약한 깨비가 다가오지 않는다.' },
+  bike: { id: 'bike', name: '두바퀴', price: 0, kind: 'key', desc: '바람처럼 달리는 자전거. 가방에서 꺼내 타고 내린다.' },
+  rod: { id: 'rod', name: '대나무 낚싯대', price: 0, kind: 'key', desc: '물가를 바라보고 쓰면 물속 깨비가 걸린다.' },
   moonbell: { id: 'moonbell', name: '달빛 방울', price: 0, kind: 'key', desc: '맑은 소리가 나는 방울. 그믐밤 숲에서 울리면……' },
 };
