@@ -3,7 +3,7 @@
 방과 후 컴퓨터실에서 하던 웹 미니게임들의 느낌을 살려, **모든 게임을 새로 만들어** 한곳에 모은 사이트입니다.
 다른 게임의 파일이나 그림을 가져오지 않고 규칙·그림·음악을 직접 만들었습니다.
 
-▶ 바로 하기: https://minhyuk94.github.io/flashgames/ (main에 푸시하면 `pages.yml`이 테스트·빌드 후 자동 배포)
+▶ 바로 하기: https://mhyoo-games.github.io/flashgames/ (main에 푸시하면 `pages.yml`이 테스트·빌드 후 자동 배포)
 
 | 게임 | 장르 | 내용 |
 | --- | --- | --- |
